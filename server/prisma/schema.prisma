@@ -7,72 +7,47 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
-model Employee {
-  id             String           @id @default(uuid())
-  name           String
-  email          String           @unique
-  role           String
-  department     String
-  lastActive     DateTime?
-  riskScore      Float            @default(0)
-  communications Communications[]
-  financialLogs  FinancialLog[]
-  threats        Threat[]
-  createdAt      DateTime         @default(now())
-  updatedAt      DateTime         @updatedAt
+model Upload {
+  id        String   @id @default(uuid())
+  fileName  String
+  fileType  String
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  records   Record[]
+  threats   Threat[]
 }
 
-model Communications {
-  id         String   @id @default(uuid())
-  employeeId String
-  channel    String
-  content    String
-  timestamp  DateTime
-
+model Record {
+  id            String    @id @default(uuid())
+  uploadId      String
+  txId          String?
+  partner       String?
+  amount        Float?
+  date          DateTime?
+  raw           Json?
   embeddingJson Json?
+  upload        Upload    @relation(fields: [uploadId], references: [id], onDelete: Cascade)
+  threats       Threat[]
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
 
-  employee  Employee @relation(fields: [employeeId], references: [id], onDelete: Cascade)
-  createdAt DateTime @default(now())
-
-  @@index([employeeId, timestamp])
-}
-
-model FinancialLog {
-  id              String   @id @default(uuid())
-  employeeId      String
-  transactionType String
-  amount          Float
-  notes           String?
-  timestamp       DateTime
-
-  employee  Employee @relation(fields: [employeeId], references: [id], onDelete: Cascade)
-  createdAt DateTime @default(now())
-
-  @@index([employeeId, timestamp])
-  @@index([transactionType, timestamp])
+  @@index([uploadId])
+  @@index([partner])
+  @@index([date])
 }
 
 model Threat {
   id              String   @id @default(uuid())
-  employeeId      String?
+  uploadId        String
+  recordId        String?
   threatType      String
   description     String
-  confidenceScore Float    @default(0.5)
+  confidenceScore Float
   status          String   @default("open")
   createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+  upload          Upload   @relation(fields: [uploadId], references: [id], onDelete: Cascade)
+  record          Record?  @relation(fields: [recordId], references: [id], onDelete: SetNull)
 
-  employee Employee?       @relation(fields: [employeeId], references: [id], onDelete: SetNull)
-  reports  WarRoomReport[]
-
-  @@index([employeeId, status, createdAt])
-}
-
-model WarRoomReport {
-  id             String   @id @default(uuid())
-  threatId       String
-  generatedAt    DateTime @default(now())
-  reportUrl      String?
-  recommendation String?
-
-  threat Threat @relation(fields: [threatId], references: [id], onDelete: Cascade)
+  @@index([uploadId, status, createdAt])
 }
