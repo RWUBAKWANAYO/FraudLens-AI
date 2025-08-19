@@ -1,0 +1,12 @@
+"use strict";
+Object.defineProperty(exports, "__esModule", { value: true });
+exports.router = void 0;
+const express_1 = require("express");
+const transactions_1 = require("../controllers/transactions");
+const ingest_1 = require("../controllers/ingest");
+const router = (0, express_1.Router)();
+exports.router = router;
+router.get("/test", transactions_1.testConnection);
+router.post("/employees", ingest_1.createEmployee);
+router.post("/communications", ingest_1.ingestCommunication);
+router.post("/fraud-check", transactions_1.checkFraud);
