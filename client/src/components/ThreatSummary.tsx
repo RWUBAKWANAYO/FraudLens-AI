@@ -21,7 +21,7 @@ export default function ThreatSummary({ result }: Props) {
         <div className="overflow-x-auto">
           <table className="w-full text-sm border-collapse">
             <thead>
-              <tr className="bg-gray-100 text-left">
+              <tr className="bg-gray-500 text-left">
                 <th className="px-4 py-2">Type</th>
                 <th className="px-4 py-2">Amount</th>
                 <th className="px-4 py-2">Confidence</th>
@@ -31,9 +31,9 @@ export default function ThreatSummary({ result }: Props) {
             <tbody>
               {threatList.map((t: any, i: number) => (
                 <tr key={i} className="border-t hover:bg-gray-50">
-                  <td className="px-4 py-2 font-medium">{t.threatType}</td>
-                  <td className="px-4 py-2">{t.amount ? `$${t.amount}` : "—"}</td>
-                  <td className="px-4 py-2">
+                  <td className="px-4 py-2 font-medium text-gray-700">{t.threatType}</td>
+                  <td className="px-4 py-2 text-gray-700">{t.amount ? `$${t.amount}` : "—"}</td>
+                  <td className="px-4 py-2 text-gray-700">
                     {t.confidenceScore ? `${(t.confidenceScore * 100).toFixed(0)}%` : "—"}
                   </td>
                   <td className="px-4 py-2 text-gray-700">{t.description}</td>
