@@ -2,7 +2,7 @@ import { Request, Response, NextFunction } from "express";
 import { prisma } from "../config/db";
 import { parseBuffer } from "../services/fileParser";
 import { detectLeaks } from "../services/leakDetection";
-import { getEmbedding } from "../services/AIEmbedding";
+import { getEmbedding } from "../services/aiEmbedding";
 import { Prisma } from "@prisma/client";
 
 export async function handleFileUpload(req: Request, res: Response, next: NextFunction) {
@@ -16,6 +16,14 @@ export async function handleFileUpload(req: Request, res: Response, next: NextFu
     const fileType = req.file.mimetype;
 
     console.log({ fileName, fileType, bufferLength: buffer.length });
+
+    // Validate file type
+    const ext = fileName.split(".").pop()?.toLowerCase();
+    if (!ext || !["csv", "xlsx", "xls"].includes(ext)) {
+      return res.status(400).json({
+        error: "Unsupported file format. Please upload CSV or Excel files only.",
+      });
+    }
 
     // Create Upload record
     const upload = await prisma.upload.create({
@@ -61,12 +69,13 @@ export async function handleFileUpload(req: Request, res: Response, next: NextFu
     });
 
     // Run leak detection
-    const threats = await detectLeaks(inserted, upload.id);
+    const { threatsCreated, summary } = await detectLeaks(inserted, upload.id);
 
     return res.json({
       uploadId: upload.id,
       recordsAnalyzed: inserted.length,
-      threats,
+      threats: threatsCreated,
+      summary,
     });
   } catch (err) {
     next(err);

@@ -2,21 +2,34 @@
 
 import { useState } from "react";
 import FileUpload from "../components/FileUpload";
+import ThreatSummary from "@/components/ThreatSummary";
 
 export default function HomePage() {
   const [result, setResult] = useState<any>(null);
 
   return (
-    <main className="p-6 max-w-4xl mx-auto">
-      <h1 className="text-2xl font-bold mb-4">Upload CSV, Excel, or PDF</h1>
-      <FileUpload onUploadComplete={setResult} />
+    <main className="min-h-screen bg-gray-50 p-6">
+      <div className="max-w-5xl mx-auto space-y-8">
+        {/* Header */}
+        <header className="text-center">
+          <h1 className="text-3xl font-bold text-gray-900">Fraud & Anomaly Detector</h1>
+          <p className="text-gray-600 mt-2">
+            Upload CSV, Excel, or PDF transaction data for automated anomaly detection.
+          </p>
+        </header>
 
-      {result && (
-        <div className="mt-6 border rounded p-4 bg-gray-800">
-          <h2 className="font-bold mb-2">Analysis Result</h2>
-          <pre className="text-sm">{JSON.stringify(result, null, 2)}</pre>
-        </div>
-      )}
+        {/* Upload */}
+        <section className="bg-white p-6 rounded-2xl shadow-md">
+          <FileUpload onUploadComplete={setResult} />
+        </section>
+
+        {/* Results */}
+        {result && (
+          <section className="bg-white p-6 rounded-2xl shadow-md">
+            <ThreatSummary result={result} />
+          </section>
+        )}
+      </div>
     </main>
   );
 }

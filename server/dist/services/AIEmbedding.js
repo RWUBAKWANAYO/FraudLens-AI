@@ -19,10 +19,11 @@ const client = new openai_1.default({
     apiKey: process.env.OPENAI_API_KEY,
 });
 const USE_LOCAL = process.env.USE_LOCAL === "true";
+const LOCAL_AI_URL = process.env.LOCAL_AI_URL;
 function getEmbedding(text) {
     return __awaiter(this, void 0, void 0, function* () {
         if (USE_LOCAL) {
-            const res = yield (0, node_fetch_1.default)("http://localhost:5001/embed", {
+            const res = yield (0, node_fetch_1.default)(`${LOCAL_AI_URL}/embed`, {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
                 body: JSON.stringify({ text }),

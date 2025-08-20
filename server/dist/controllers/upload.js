@@ -13,10 +13,10 @@ exports.handleFileUpload = handleFileUpload;
 const db_1 = require("../config/db");
 const fileParser_1 = require("../services/fileParser");
 const leakDetection_1 = require("../services/leakDetection");
-const AIEmbedding_1 = require("../services/AIEmbedding");
+const aiEmbedding_1 = require("../services/aiEmbedding");
 function handleFileUpload(req, res, next) {
     return __awaiter(this, void 0, void 0, function* () {
-        var _a, _b, _c, _d, _e, _f, _g;
+        var _a, _b, _c, _d, _e, _f, _g, _h;
         try {
             if (!req.file) {
                 return res.status(400).json({ error: "No file uploaded" });
@@ -25,6 +25,13 @@ function handleFileUpload(req, res, next) {
             const fileName = req.file.originalname;
             const fileType = req.file.mimetype;
             console.log({ fileName, fileType, bufferLength: buffer.length });
+            // Validate file type
+            const ext = (_a = fileName.split(".").pop()) === null || _a === void 0 ? void 0 : _a.toLowerCase();
+            if (!ext || !["csv", "xlsx", "xls"].includes(ext)) {
+                return res.status(400).json({
+                    error: "Unsupported file format. Please upload CSV or Excel files only.",
+                });
+            }
             // Create Upload record
             const upload = yield db_1.prisma.upload.create({
                 data: { fileName, fileType },
@@ -33,10 +40,10 @@ function handleFileUpload(req, res, next) {
             const parsedRecords = yield (0, fileParser_1.parseBuffer)(buffer, fileName);
             const toCreate = [];
             for (const r of parsedRecords) {
-                const text = `${(_a = r.txId) !== null && _a !== void 0 ? _a : ""} ${(_b = r.partner) !== null && _b !== void 0 ? _b : ""} ${(_c = r.amount) !== null && _c !== void 0 ? _c : ""}`;
+                const text = `${(_b = r.txId) !== null && _b !== void 0 ? _b : ""} ${(_c = r.partner) !== null && _c !== void 0 ? _c : ""} ${(_d = r.amount) !== null && _d !== void 0 ? _d : ""}`;
                 let vector = [];
                 try {
-                    vector = yield (0, AIEmbedding_1.getEmbedding)(text);
+                    vector = yield (0, aiEmbedding_1.getEmbedding)(text);
                 }
                 catch (err) {
                     console.error("Embedding failed for record:", r, err);
@@ -44,11 +51,11 @@ function handleFileUpload(req, res, next) {
                 }
                 toCreate.push({
                     uploadId: upload.id,
-                    txId: (_d = r.txId) !== null && _d !== void 0 ? _d : null,
-                    partner: (_e = r.partner) !== null && _e !== void 0 ? _e : null,
-                    amount: (_f = r.amount) !== null && _f !== void 0 ? _f : null,
+                    txId: (_e = r.txId) !== null && _e !== void 0 ? _e : null,
+                    partner: (_f = r.partner) !== null && _f !== void 0 ? _f : null,
+                    amount: (_g = r.amount) !== null && _g !== void 0 ? _g : null,
                     date: r.date ? new Date(r.date) : null,
-                    raw: (_g = r.raw) !== null && _g !== void 0 ? _g : {},
+                    raw: (_h = r.raw) !== null && _h !== void 0 ? _h : {},
                     embeddingJson: vector,
                 });
             }
@@ -62,11 +69,12 @@ function handleFileUpload(req, res, next) {
                 orderBy: { createdAt: "asc" },
             });
             // Run leak detection
-            const threats = yield (0, leakDetection_1.detectLeaks)(inserted, upload.id);
+            const { threatsCreated, summary } = yield (0, leakDetection_1.detectLeaks)(inserted, upload.id);
             return res.json({
                 uploadId: upload.id,
                 recordsAnalyzed: inserted.length,
-                threats,
+                threats: threatsCreated,
+                summary,
             });
         }
         catch (err) {

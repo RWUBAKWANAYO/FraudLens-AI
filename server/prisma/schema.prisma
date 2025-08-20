@@ -41,7 +41,7 @@ model Threat {
   uploadId        String
   recordId        String?
   threatType      String
-  description     String
+  description     String   @db.Text
   confidenceScore Float
   status          String   @default("open")
   createdAt       DateTime @default(now())

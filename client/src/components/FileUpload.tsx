@@ -1,9 +1,10 @@
 "use client";
 
 import { useState, ChangeEvent, FormEvent } from "react";
+import { Upload, Loader2 } from "lucide-react";
 
 type Props = {
-  onUploadComplete: (data: any) => void; // return backend response
+  onUploadComplete: (data: any) => void;
 };
 
 export default function FileUpload({ onUploadComplete }: Props) {
@@ -54,16 +55,29 @@ export default function FileUpload({ onUploadComplete }: Props) {
   };
 
   return (
-    <form onSubmit={handleSubmit} className="flex flex-col gap-3">
-      <input type="file" onChange={handleFileChange} />
-      {file && <p>Selected: {file.name}</p>}
-      {error && <p className="text-red-600">{error}</p>}
+    <form onSubmit={handleSubmit} className="flex flex-col items-center gap-4 text-center">
+      <label className="w-full flex flex-col items-center px-4 py-6 bg-gray-50 rounded-lg border-2 border-dashed border-gray-300 cursor-pointer hover:border-blue-400">
+        <Upload className="w-10 h-10 text-gray-400 mb-2" />
+        <span className="text-gray-600">
+          {file ? file.name : "Click to upload or drag & drop file"}
+        </span>
+        <input type="file" onChange={handleFileChange} className="hidden" />
+      </label>
+
+      {error && <p className="text-red-600 text-sm">{error}</p>}
+
       <button
         type="submit"
         disabled={!file || loading}
-        className="px-4 py-2 bg-blue-500 text-white rounded hover:bg-blue-600"
+        className="flex items-center gap-2 px-6 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50"
       >
-        {loading ? "Uploading..." : "Upload & Analyze"}
+        {loading ? (
+          <>
+            <Loader2 className="animate-spin w-4 h-4" /> Uploading...
+          </>
+        ) : (
+          "Upload & Analyze"
+        )}
       </button>
     </form>
   );
