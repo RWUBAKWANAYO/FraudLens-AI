@@ -1,84 +1,77 @@
-"use client";
+import { useState } from "react";
 
-import { useState, ChangeEvent, FormEvent } from "react";
-import { Upload, Loader2 } from "lucide-react";
+interface UploadResponse {
+  uploadId: string;
+  recordsAnalyzed: number;
+  threats: any[];
+  summary: any;
+}
 
-type Props = {
-  onUploadComplete: (data: any) => void;
-};
-
-export default function FileUpload({ onUploadComplete }: Props) {
+export default function FileUpload({ companyId }: { companyId: string }) {
   const [file, setFile] = useState<File | null>(null);
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  const [isUploading, setIsUploading] = useState(false);
+  const [result, setResult] = useState<UploadResponse | null>(null);
 
-  const handleFileChange = (e: ChangeEvent<HTMLInputElement>) => {
-    setError(null);
-    if (e.target.files && e.target.files[0]) {
-      const selected = e.target.files[0];
-      const allowed = [
-        "text/csv",
-        "application/vnd.ms-excel",
-        "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-        "application/pdf",
-      ];
-      if (!allowed.includes(selected.type)) {
-        setError("Only CSV, Excel or PDF files are allowed");
-        return;
-      }
-      setFile(selected);
+  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    if (e.target.files) {
+      setFile(e.target.files[0]);
     }
   };
 
-  const handleSubmit = async (e: FormEvent) => {
-    e.preventDefault();
-    if (!file) return setError("No file selected");
+  const handleUpload = async () => {
+    if (!file || !companyId) return;
 
-    setLoading(true);
+    setIsUploading(true);
     const formData = new FormData();
     formData.append("file", file);
+    formData.append("companyId", companyId);
 
     try {
-      const res = await fetch("http://localhost:8080/api/v1/upload", {
+      const response = await fetch(`${process.env.NEXT_PUBLIC_SERVER_URL}/upload`, {
         method: "POST",
         body: formData,
       });
-      if (!res.ok) throw new Error("Upload failed");
-      const data = await res.json();
-      onUploadComplete(data);
-    } catch (err: any) {
-      setError(err.message || "Upload error");
+
+      if (response.ok) {
+        const data = await response.json();
+        setResult(data);
+      } else {
+        console.error("Upload failed");
+      }
+    } catch (error) {
+      console.error("Error uploading file:", error);
     } finally {
-      setLoading(false);
-      setFile(null);
+      setIsUploading(false);
     }
   };
 
   return (
-    <form onSubmit={handleSubmit} className="flex flex-col items-center gap-4 text-center">
-      <label className="w-full flex flex-col items-center px-4 py-6 bg-gray-50 rounded-lg border-2 border-dashed border-gray-300 cursor-pointer hover:border-blue-400">
-        <Upload className="w-10 h-10 text-gray-400 mb-2" />
-        <span className="text-gray-600">
-          {file ? file.name : "Click to upload or drag & drop file"}
-        </span>
-        <input type="file" onChange={handleFileChange} className="hidden" />
-      </label>
+    <div className="p-4 border rounded-lg bg-gray-800 shadow">
+      <h2 className="text-xl font-bold mb-4">Upload Transaction Data</h2>
+      <div className="flex items-center gap-4">
+        <input
+          type="file"
+          accept=".csv,.xlsx,.xls"
+          onChange={handleFileChange}
+          className="border p-2 rounded"
+        />
+        <button
+          onClick={handleUpload}
+          disabled={!file || isUploading}
+          className="bg-blue-500 text-white px-4 py-2 rounded disabled:bg-gray-400"
+        >
+          {isUploading ? "Processing..." : "Upload"}
+        </button>
+      </div>
 
-      {error && <p className="text-red-600 text-sm">{error}</p>}
-
-      <button
-        type="submit"
-        disabled={!file || loading}
-        className="flex items-center gap-2 px-6 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50"
-      >
-        {loading ? (
-          <>
-            <Loader2 className="animate-spin w-4 h-4" /> Uploading...
-          </>
-        ) : (
-          "Upload & Analyze"
-        )}
-      </button>
-    </form>
+      {result && (
+        <div className="mt-4 p-4 bg-gray-900 rounded">
+          <h3 className="font-semibold">Upload Results:</h3>
+          <p>Records Analyzed: {result.recordsAnalyzed}</p>
+          <p>Threats Detected: {result.threats.length}</p>
+          <pre className="text-sm mt-2">{JSON.stringify(result.summary, null, 2)}</pre>
+        </div>
+      )}
+    </div>
   );
 }

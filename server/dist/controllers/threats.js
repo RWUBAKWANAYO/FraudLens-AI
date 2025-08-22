@@ -9,17 +9,22 @@ var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, P, ge
     });
 };
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.connectDB = exports.prisma = void 0;
-const client_1 = require("@prisma/client");
-exports.prisma = new client_1.PrismaClient();
-const connectDB = () => __awaiter(void 0, void 0, void 0, function* () {
-    try {
-        yield exports.prisma.$connect();
-        console.log("✅ TiDB connected successfully");
-    }
-    catch (error) {
-        console.error("❌ TiDB connection error:", error);
-        process.exit(1);
-    }
-});
-exports.connectDB = connectDB;
+exports.listThreats = listThreats;
+const db_1 = require("../config/db");
+function listThreats(req, res) {
+    return __awaiter(this, void 0, void 0, function* () {
+        try {
+            const { companyId } = req.query;
+            const threats = yield db_1.prisma.threat.findMany({
+                where: { companyId: companyId },
+                include: { record: true },
+                orderBy: { createdAt: "desc" },
+                take: 100,
+            });
+            res.json(threats);
+        }
+        catch (error) {
+            res.status(500).json({ error: "Failed to fetch threats" });
+        }
+    });
+}

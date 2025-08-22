@@ -7,37 +7,74 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
+/// Multi-tenant: a company owns uploads, records, alerts, and webhook subs
+model Company {
+  id        String                @id @default(uuid())
+  name      String
+  slug      String                @unique
+  createdAt DateTime              @default(now())
+  updatedAt DateTime              @updatedAt
+  alerts    Alert[]
+  records   Record[]
+  rules     Rule[]
+  threats   Threat[]
+  uploads   Upload[]
+  webhooks  WebhookSubscription[]
+}
+
 model Upload {
   id        String   @id @default(uuid())
+  companyId String
   fileName  String
   fileType  String
+  source    String   @default("batch")
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
   records   Record[]
   threats   Threat[]
+  company   Company  @relation(fields: [companyId], references: [id], onDelete: Cascade)
+
+  @@index([companyId, createdAt])
 }
 
 model Record {
-  id            String    @id @default(uuid())
+  id            String                      @id @default(uuid())
+  companyId     String
   uploadId      String
   txId          String?
-  partner       String?
+  partner       String?                     @db.VarChar(256)
   amount        Float?
+  currency      String?                     @db.VarChar(12)
   date          DateTime?
+  ip            String?                     @db.VarChar(64)
+  device        String?                     @db.VarChar(128)
+  geoCountry    String?                     @db.VarChar(8)
+  geoCity       String?                     @db.VarChar(128)
+  mcc           String?                     @db.VarChar(8)
+  channel       String?                     @db.VarChar(32)
   raw           Json?
   embeddingJson Json?
-  upload        Upload    @relation(fields: [uploadId], references: [id], onDelete: Cascade)
+  /// TiDB VECTOR column (Prisma doesn't natively support it yet)
+  /// VECTOR dimension: 384 for OpenAI, 1105 for local AI
+  embeddingVec  Unsupported("vector(384)")?
+  createdAt     DateTime                    @default(now())
+  updatedAt     DateTime                    @updatedAt
+  Alert         Alert[]
+  company       Company                     @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  upload        Upload                      @relation(fields: [uploadId], references: [id], onDelete: Cascade)
   threats       Threat[]
-  createdAt     DateTime  @default(now())
-  updatedAt     DateTime  @updatedAt
 
-  @@index([uploadId])
-  @@index([partner])
-  @@index([date])
+  @@index([companyId, date])
+  @@index([companyId, partner])
+  @@index([companyId, txId])
+  @@index([uploadId], map: "Record_uploadId_fkey")
+  @@index([companyId, date], map: "idx_record_company_date")
+  @@index([companyId, partner], map: "idx_record_company_partner")
 }
 
 model Threat {
   id              String   @id @default(uuid())
+  companyId       String
   uploadId        String
   recordId        String?
   threatType      String
@@ -46,8 +83,59 @@ model Threat {
   status          String   @default("open")
   createdAt       DateTime @default(now())
   updatedAt       DateTime @updatedAt
+  Alert           Alert[]
+  company         Company  @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  record          Record?  @relation(fields: [recordId], references: [id])
   upload          Upload   @relation(fields: [uploadId], references: [id], onDelete: Cascade)
-  record          Record?  @relation(fields: [recordId], references: [id], onDelete: SetNull)
 
-  @@index([uploadId, status, createdAt])
+  @@index([companyId, status, createdAt])
+  @@index([recordId], map: "Threat_recordId_fkey")
+  @@index([uploadId], map: "Threat_uploadId_fkey")
+}
+
+model Alert {
+  id        String   @id @default(uuid())
+  companyId String
+  recordId  String?
+  threatId  String?
+  severity  String   @default("medium")
+  title     String
+  summary   String   @db.Text
+  payload   Json?
+  delivered Boolean  @default(false)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  company   Company  @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  record    Record?  @relation(fields: [recordId], references: [id])
+  threat    Threat?  @relation(fields: [threatId], references: [id])
+
+  @@index([companyId, createdAt])
+  @@index([recordId], map: "Alert_recordId_fkey")
+  @@index([threatId], map: "Alert_threatId_fkey")
+}
+
+model WebhookSubscription {
+  id        String   @id @default(uuid())
+  companyId String
+  url       String
+  secret    String
+  active    Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  company   Company  @relation(fields: [companyId], references: [id], onDelete: Cascade)
+
+  @@index([companyId, active])
+}
+
+model Rule {
+  id         String   @id @default(uuid())
+  companyId  String
+  name       String
+  definition Json
+  enabled    Boolean  @default(true)
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+  company    Company  @relation(fields: [companyId], references: [id], onDelete: Cascade)
+
+  @@index([companyId], map: "Rule_companyId_fkey")
 }

@@ -12,31 +12,31 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
     return (mod && mod.__esModule) ? mod : { "default": mod };
 };
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.getEmbedding = getEmbedding;
-const openai_1 = __importDefault(require("openai"));
+exports.dispatchEnterpriseWebhooks = dispatchEnterpriseWebhooks;
 const node_fetch_1 = __importDefault(require("node-fetch"));
-const client = new openai_1.default({
-    apiKey: process.env.OPENAI_API_KEY,
-});
-const USE_LOCAL_AI = process.env.USE_LOCAL_AI === "true";
-const LOCAL_AI_URL = process.env.LOCAL_AI_URL;
-function getEmbedding(text) {
+const db_1 = require("../config/db");
+function dispatchEnterpriseWebhooks(companyId, event) {
     return __awaiter(this, void 0, void 0, function* () {
-        if (USE_LOCAL_AI) {
-            const res = yield (0, node_fetch_1.default)(`${LOCAL_AI_URL}/embed`, {
-                method: "POST",
-                headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({ text }),
-            });
-            const data = yield res.json();
-            return data.embedding;
-        }
-        else {
-            const response = yield client.embeddings.create({
-                model: "text-embedding-3-small",
-                input: text,
-            });
-            return response.data[0].embedding;
+        const subs = yield db_1.prisma.webhookSubscription.findMany({ where: { companyId, active: true } });
+        for (const s of subs) {
+            try {
+                yield (0, node_fetch_1.default)(s.url, {
+                    method: "POST",
+                    headers: {
+                        "content-type": "application/json",
+                        "x-signature": signBody(s.secret, event),
+                    },
+                    body: JSON.stringify(event),
+                });
+            }
+            catch (e) {
+                // store failure for retry (simplified)
+                console.error("webhook delivery failed", s.url, e);
+            }
         }
     });
+}
+function signBody(secret, payload) {
+    const crypto = require("crypto");
+    return crypto.createHmac("sha256", secret).update(JSON.stringify(payload)).digest("hex");
 }

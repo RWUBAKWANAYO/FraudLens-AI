@@ -5,11 +5,11 @@ const client = new OpenAI({
   apiKey: process.env.OPENAI_API_KEY,
 });
 
-const USE_LOCAL = process.env.USE_LOCAL === "true";
+const USE_LOCAL_AI = process.env.USE_LOCAL_AI === "true";
 const LOCAL_AI_URL = process.env.LOCAL_AI_URL;
 
 export async function getEmbedding(text: string): Promise<number[]> {
-  if (USE_LOCAL) {
+  if (USE_LOCAL_AI) {
     const res = await fetch(`${LOCAL_AI_URL}/embed`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },

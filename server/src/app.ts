@@ -2,15 +2,13 @@ import express from "express";
 import "dotenv/config";
 import cors from "cors";
 
-import { uploadRouter } from "./routes/upload";
+import { router } from "./routes";
 
 const app = express();
 
-// Middlewares
 app.use(cors());
 app.use(express.json());
 
-// Routes
-app.use("/api/v1/upload", uploadRouter);
+app.use("/api/v1", router);
 
 export default app;

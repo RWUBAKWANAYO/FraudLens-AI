@@ -9,17 +9,19 @@ var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, P, ge
     });
 };
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.connectDB = exports.prisma = void 0;
-const client_1 = require("@prisma/client");
-exports.prisma = new client_1.PrismaClient();
-const connectDB = () => __awaiter(void 0, void 0, void 0, function* () {
-    try {
-        yield exports.prisma.$connect();
-        console.log("✅ TiDB connected successfully");
-    }
-    catch (error) {
-        console.error("❌ TiDB connection error:", error);
-        process.exit(1);
-    }
-});
-exports.connectDB = connectDB;
+exports.findSimilarity = findSimilarity;
+const aiEmbedding_1 = require("../services/aiEmbedding");
+const similaritySearch_1 = require("../services/similaritySearch");
+function findSimilarity(req, res) {
+    return __awaiter(this, void 0, void 0, function* () {
+        try {
+            const { companyId, text } = req.body;
+            const embedding = yield (0, aiEmbedding_1.getEmbedding)(text);
+            const results = yield (0, similaritySearch_1.findSimilarForEmbedding)(companyId, embedding);
+            res.json(results);
+        }
+        catch (error) {
+            res.status(500).json({ error: "Similarity search failed" });
+        }
+    });
+}

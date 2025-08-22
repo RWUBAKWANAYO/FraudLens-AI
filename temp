@@ -1,0 +1,866 @@
+// =============================================
+// prisma/schema.prisma  (MySQL-compatible TiDB; vector via Unsupported type)
+// =============================================
+
+generator client {
+    provider = "prisma-client-js"
+}
+
+datasource db {
+    provider = "mysql"
+    url = env("DATABASE_URL")
+}
+
+/// Multi-tenant: a company owns uploads, records, alerts, and webhook subs
+model Company {
+    id String @id @default(uuid())
+    name String
+    slug String @unique
+    createdAt DateTime @default(now())
+    updatedAt DateTime @updatedAt
+    alerts Alert[]
+    records Record[]
+    rules Rule[]
+    threats Threat[]
+    uploads Upload[]
+    webhooks WebhookSubscription[]
+}
+
+model Upload {
+    id String @id @default(uuid())
+    companyId String
+    fileName String
+    fileType String
+    source String @default("batch")
+    createdAt DateTime @default(now())
+    updatedAt DateTime @updatedAt
+    records Record[]
+    threats Threat[]
+    company Company @relation(fields: [companyId], references: [id], onDelete: Cascade)
+
+    @ @index([companyId, createdAt])
+}
+
+model Record {
+    id String @id @default(uuid())
+    companyId String
+    uploadId String
+    txId String ?
+        partner String ? @db.VarChar(256)
+    amount Float ?
+        currency String ? @db.VarChar(12)
+    date DateTime ?
+        ip String ? @db.VarChar(64)
+    device String ? @db.VarChar(128)
+    geoCountry String ? @db.VarChar(8)
+    geoCity String ? @db.VarChar(128)
+    mcc String ? @db.VarChar(8)
+    channel String ? @db.VarChar(32)
+    raw Json ?
+        embeddingJson Json ?
+        /// TiDB VECTOR column (Prisma doesn't natively support it yet)
+        // embeddingVec  Unsupported("vector(1536)")?
+        embeddingVec Unsupported("vector(384)") ?
+        createdAt DateTime @default(now())
+    updatedAt DateTime @updatedAt
+    Alert Alert[]
+    company Company @relation(fields: [companyId], references: [id], onDelete: Cascade)
+    upload Upload @relation(fields: [uploadId], references: [id], onDelete: Cascade)
+    threats Threat[]
+
+    @ @index([companyId, date])
+    @ @index([companyId, partner])
+    @ @index([companyId, txId])
+    @ @index([uploadId], map: "Record_uploadId_fkey")
+    @ @index([companyId, date], map: "idx_record_company_date")
+    @ @index([companyId, partner], map: "idx_record_company_partner")
+    @ @index([embeddingVec], map: "idx_record_embedding_cosine")
+}
+
+model Threat {
+    id String @id @default(uuid())
+    companyId String
+    uploadId String
+    recordId String ?
+        threatType String
+    description String @db.Text
+    confidenceScore Float
+    status String @default("open")
+    createdAt DateTime @default(now())
+    updatedAt DateTime @updatedAt
+    Alert Alert[]
+    company Company @relation(fields: [companyId], references: [id], onDelete: Cascade)
+    record Record ? @relation(fields: [recordId], references: [id])
+    upload Upload @relation(fields: [uploadId], references: [id], onDelete: Cascade)
+
+    @ @index([companyId, status, createdAt])
+    @ @index([recordId], map: "Threat_recordId_fkey")
+    @ @index([uploadId], map: "Threat_uploadId_fkey")
+}
+
+model Alert {
+    id String @id @default(uuid())
+    companyId String
+    recordId String ?
+        threatId String ?
+        severity String @default("medium")
+    title String
+    summary String @db.Text
+    payload Json ?
+        delivered Boolean @default(false)
+    createdAt DateTime @default(now())
+    updatedAt DateTime @updatedAt
+    company Company @relation(fields: [companyId], references: [id], onDelete: Cascade)
+    record Record ? @relation(fields: [recordId], references: [id])
+    threat Threat ? @relation(fields: [threatId], references: [id])
+
+    @ @index([companyId, createdAt])
+    @ @index([recordId], map: "Alert_recordId_fkey")
+    @ @index([threatId], map: "Alert_threatId_fkey")
+}
+
+model WebhookSubscription {
+    id String @id @default(uuid())
+    companyId String
+    url String
+    secret String
+    active Boolean @default(true)
+    createdAt DateTime @default(now())
+    updatedAt DateTime @updatedAt
+    company Company @relation(fields: [companyId], references: [id], onDelete: Cascade)
+
+    @ @index([companyId, active])
+}
+
+model Rule {
+    id String @id @default(uuid())
+    companyId String
+    name String
+    definition Json
+    enabled Boolean @default(true)
+    createdAt DateTime @default(now())
+    updatedAt DateTime @updatedAt
+    company Company @relation(fields: [companyId], references: [id], onDelete: Cascade)
+
+    @ @index([companyId], map: "Rule_companyId_fkey")
+}
+
+
+// =============================================
+// .env.ts
+// =============================================
+PORT = 8080
+USE_LOCAL = true
+LOCAL_AI_URL = "http://localhost:5001"
+DATABASE_URL = "mysql://4XbqL1XoaseKDcN.root:wOZVk5QLPUr1M0Yh@gateway01.eu-central-1.prod.aws.tidbcloud.com:4000/fraud-detection?sslaccept=strict"
+OPENAI_API_KEY = "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"
+
+PUBLIC_WS_ORIGIN = "*"
+
+#
+Redis Cloud
+REDIS_URL = "redis://default:KbjpGVtwNTLDERnuNOk9XAnR2iQ1yDi3@redis-18431.c321.us-east-1-2.ec2.redns.redis-cloud.com:18431"
+
+#
+RabbitMQ CloudAMQP
+RABBIT_URL = "amqps://gexhxwdg:KLXF1HBxDnedx8g3tJ8_yCZBO3NlVCC_@possum.lmq.cloudamqp.com/gexhxwdg"
+
+
+// =============================================
+// src/config/db.ts
+// =============================================
+import { PrismaClient } from "@prisma/client";
+
+export const prisma = new PrismaClient();
+
+export const connectDB = async() => {
+    try {
+        await prisma.$connect();
+        console.log("✅ TiDB connected successfully");
+    } catch (error) {
+        console.error("❌ TiDB connection error:", error);
+        process.exit(1);
+    }
+};
+
+
+
+// =============================================
+// src/config/socket.ts  (Socket.IO for realtime alerts)
+// =============================================
+import { Server } from "socket.io";
+
+let io: Server | null = null;
+
+export function attachSocket(io: Server) {
+    io.on("connection", (socket) => {
+        console.log("Socket connected:", socket.id);
+
+        socket.on("join_company", (companyId: string) => {
+            socket.join(`company:${companyId}`);
+        });
+
+        socket.on("disconnect", () => {
+            console.log("Socket disconnected:", socket.id);
+        });
+    });
+}
+
+export function pushAlert(companyId: string, event: any) {
+    if (!io) return;
+    io.to(`company:${companyId}`).emit("alert", event);
+}
+
+
+// =============================================
+// src/services/vectorStore.ts  (TiDB vector writes & reads via raw SQL)
+// =============================================
+import { prisma } from "../config/db";
+
+// Persist both JSON (for Prisma) and VECTOR (for TiDB ANN). Use VEC_FROM_TEXT() to cast.
+export async function saveRecordEmbedding(recordId: string, embedding: number[]) {
+    const vecText = `[${embedding.join(",")}]`;
+    // Update Prisma JSON field and TiDB VECTOR in one statement
+    await prisma.$executeRawUnsafe(
+        `UPDATE Record SET embeddingJson = CAST(? AS JSON), embeddingVec = VEC_FROM_TEXT(?) WHERE id = ?`,
+        JSON.stringify(embedding),
+        vecText,
+        recordId
+    );
+}
+
+export async function knnByVector(companyId: string, embedding: number[], k = 20) {
+    const vecText = `[${embedding.join(",")}]`;
+    // KNN across same company first
+    const rows = await prisma.$queryRawUnsafe < any[] > (
+        `SELECT id, companyId, partner, amount, date,
+            VEC_COSINE_DISTANCE(embeddingVec, ?) AS distance
+       FROM Record
+      WHERE companyId = ? AND embeddingVec IS NOT NULL
+      ORDER BY VEC_COSINE_DISTANCE(embeddingVec, ?)
+      LIMIT ?`,
+        vecText,
+        companyId,
+        vecText,
+        k
+    );
+    return rows;
+}
+
+export async function knnGlobal(embedding: number[], k = 20) {
+    const vecText = `[${embedding.join(",")}]`;
+    const rows = await prisma.$queryRawUnsafe < any[] > (
+        `SELECT id, companyId, partner, amount, date,
+            VEC_COSINE_DISTANCE(embeddingVec, ?) AS distance
+       FROM Record
+      WHERE embeddingVec IS NOT NULL
+      ORDER BY VEC_COSINE_DISTANCE(embeddingVec, ?)
+      LIMIT ?`,
+        vecText,
+        vecText,
+        k
+    );
+    return rows;
+}
+
+
+// =============================================
+// src/services/similaritySearch.ts
+// =============================================
+import { knnByVector, knnGlobal } from "./vectorStore";
+
+export type SimilarNeighbor = {
+    id: string;
+    companyId: string;
+    partner: string | null;
+    amount: number | null;
+    date: Date | null;
+    distance: number;
+};
+
+export async function findSimilarForEmbedding(companyId: string, emb: number[]) {
+    const local = await knnByVector(companyId, emb, 25);
+    const global = await knnGlobal(emb, 25);
+    return { local: local as SimilarNeighbor[], global: global as SimilarNeighbor[] };
+}
+
+
+// =============================================
+// src/services/rulesEngine.ts (simple JSONLogic-style evaluate)
+// =============================================
+import { Rule } from "@prisma/client";
+
+type Ctx = {
+    amount ? : number | null;
+    currency ? : string | null;
+    partner ? : string | null;
+    mcc ? : string | null;
+    countLastHour ? : number;
+};
+
+export function evaluateRules(rules: Rule[], ctx: Ctx) {
+    const triggered: { ruleId: string;reason: string }[] = [];
+    for (const r of rules) {
+        try {
+            const def: any = r.definition || {};
+            // examples: { gt: ["amount", 10000] } | { in: ["mcc", ["4829","6011"]] }
+            if (def.gt && typeof ctx[def.gt[0] as keyof Ctx] === "number") {
+                if ((ctx[def.gt[0] as keyof Ctx] as any) > def.gt[1]) triggered.push({ ruleId: r.id, reason: `${def.gt[0]}>${def.gt[1]}` });
+            }
+            if (def.in && Array.isArray(def.in[1])) {
+                const v = (ctx as any)[def.in[0]];
+                if (v && def.in[1].includes(v)) triggered.push({ ruleId: r.id, reason: `${def.in[0]} in list` });
+            }
+            if (def.regex) {
+                const [field, pattern] = def.regex;
+                const v = (ctx as any)[field];
+                if (v && new RegExp(pattern, "i").test(String(v))) triggered.push({ ruleId: r.id, reason: `${field}~=${pattern}` });
+            }
+        } catch {}
+    }
+    return triggered;
+}
+
+
+// =============================================
+// src/services/anomaly.ts (ML detectors)
+// =============================================
+import { IsolationForest } from "isolation-forest";
+
+export function isoForestScores(amounts: number[]) {
+    if (amounts.length < 25) return [] as number[];
+    const iso = new IsolationForest();
+    const X = amounts.map((a) => ({ amount: a }));
+    iso.fit(X);
+    return iso.scores();
+}
+
+
+// =============================================
+// src/services/enrichment.ts (stubs for geo/device/MCC/FX)
+// =============================================
+export type Enriched = {
+    ip ? : string | null;
+    device ? : string | null;
+    geoCountry ? : string | null;
+    geoCity ? : string | null;
+    mcc ? : string | null;
+    channel ? : string | null;
+};
+
+export async function enrich(record: any): Promise < Enriched > {
+    // Hook up MaxMind, UA parsing, MCC lookup, FX normalization here.
+    // Return minimal structure for now.
+    return {
+        ip: record.ip || null,
+        device: record.device || null,
+        geoCountry: record.geoCountry || null,
+        geoCity: record.geoCity || null,
+        mcc: record.mcc || null,
+        channel: record.channel || null,
+    };
+}
+
+
+// =============================================
+// src/services/alerts.ts (emit to Socket.IO + record Alert rows)
+// =============================================
+import { prisma } from "../config/db";
+import { pushAlert } from "../config/socket";
+
+export async function createAndDispatchAlert(input: {
+    companyId: string;
+    title: string;
+    summary: string;
+    severity ? : "info" | "low" | "medium" | "high" | "critical";
+    recordId ? : string | null;
+    threatId ? : string | null;
+    payload ? : any;
+}) {
+    const alert = await prisma.alert.create({
+        data: {
+            companyId: input.companyId,
+            recordId: input.recordId || null,
+            threatId: input.threatId || null,
+            title: input.title,
+            summary: input.summary,
+            severity: input.severity || "medium",
+            payload: input.payload || {},
+        },
+    });
+    // Realtime push to UI
+    pushAlert(input.companyId, {
+        type: "threat",
+        alertId: alert.id,
+        ...input,
+        createdAt: new Date().toISOString(),
+    });
+    return alert;
+}
+
+
+// =============================================
+// src/services/webhooks.ts (enterprise callbacks with retries)
+// =============================================
+import fetch from "node-fetch";
+import { prisma } from "../config/db";
+
+export async function dispatchEnterpriseWebhooks(companyId: string, event: any) {
+    const subs = await prisma.webhookSubscription.findMany({ where: { companyId, active: true } });
+    for (const s of subs) {
+        try {
+            await fetch(s.url, {
+                method: "POST",
+                headers: {
+                    "content-type": "application/json",
+                    "x-signature": signBody(s.secret, event),
+                },
+                body: JSON.stringify(event),
+            });
+        } catch (e) {
+            // store failure for retry (simplified)
+            console.error("webhook delivery failed", s.url, e);
+        }
+    }
+}
+
+function signBody(secret: string, payload: any) {
+    const crypto = require("crypto");
+    return crypto.createHmac("sha256", secret).update(JSON.stringify(payload)).digest("hex");
+}
+
+
+// =============================================
+// src/services/leakDetection.ts (UPDATED to use similarity + rules + ML)
+// =============================================
+import { prisma } from "../config/db";
+import type { Record as PrismaRecord } from "@prisma/client";
+import { IsolationForest } from "isolation-forest";
+import { generateThreatExplanation, type ThreatContext } from "./aiExplanation";
+import { findSimilarForEmbedding } from "./similaritySearch";
+import { evaluateRules } from "./rulesEngine";
+import { createAndDispatchAlert } from "./alerts";
+import { dispatchEnterpriseWebhooks } from "./webhooks";
+
+export async function detectLeaks(records: PrismaRecord[], uploadId: string, companyId: string) {
+    const threatsCreated: any[] = [];
+
+    const positiveAmounts = records.map((r) => r.amount ? ? 0).filter((a) => a > 0);
+    const avgAmount = positiveAmounts.length ? positiveAmounts.reduce((s, a) => s + a, 0) / positiveAmounts.length : 0;
+    const maxAmount = positiveAmounts.length ? Math.max(...positiveAmounts) : 0;
+
+    const baseStats = { mean: avgAmount, max: maxAmount, totalRecords: records.length };
+
+    // 1) Duplicate txId
+    const byTx = new Map < string,
+        PrismaRecord[] > ();
+    for (const r of records) {
+        if (!r.txId) continue;
+        const list = byTx.get(r.txId) || [];
+        list.push(r);
+        byTx.set(r.txId, list);
+    }
+    for (const [txId, list] of byTx.entries()) {
+        if (list.length > 1) {
+            const context: ThreatContext = {
+                threatType: "duplicate_tx",
+                amount: list[0].amount,
+                partner: list[0].partner,
+                txId,
+                datasetStats: baseStats,
+                additionalContext: { count: list.length },
+            };
+            const t = await createAIContextualizedThreat(companyId, uploadId, list[0].id, "duplicate_tx", 0.9, context);
+            threatsCreated.push(t);
+        }
+    }
+
+    // 2) Amount outliers (z>3)
+    const amounts = records.map((r) => r.amount ? ? 0).filter((a) => a > 0);
+    if (amounts.length >= 5) {
+        const mean = avgAmount; // already computed
+        const std = Math.sqrt(amounts.reduce((a, b) => a + (b - mean) ** 2, 0) / amounts.length);
+        for (const r of records) {
+            if (!r.amount || r.amount <= 0) continue;
+            const z = std === 0 ? 0 : Math.abs((r.amount - mean) / std);
+            if (z > 3) {
+                const context: ThreatContext = {
+                    threatType: "amount_outlier",
+                    amount: r.amount,
+                    partner: r.partner,
+                    txId: r.txId,
+                    datasetStats: {...baseStats, std },
+                    additionalContext: { zScore: z },
+                };
+                const conf = z > 5 ? 0.95 : 0.75;
+                const t = await createAIContextualizedThreat(companyId, uploadId, r.id, "amount_outlier", conf, context);
+                threatsCreated.push(t);
+            }
+        }
+    }
+
+    // 3) Invalid (<=0)
+    for (const r of records) {
+        if (r.amount !== null && r.amount <= 0) {
+            const context: ThreatContext = { threatType: "invalid_amount", amount: r.amount, partner: r.partner, txId: r.txId, datasetStats: baseStats };
+            const t = await createAIContextualizedThreat(companyId, uploadId, r.id, "invalid_amount", 0.8, context);
+            threatsCreated.push(t);
+        }
+    }
+
+    // 4) Isolation Forest
+    if (amounts.length > 20) {
+        const iso = new IsolationForest();
+        const X = records.filter((r) => r.amount !== null).map((r) => ({ amount: r.amount as number }));
+        iso.fit(X);
+        const scores = iso.scores();
+        for (let i = 0; i < scores.length; i++) {
+            const s = scores[i];
+            if (s > 0.6) {
+                const r = records[i];
+                const context: ThreatContext = {
+                    threatType: "ml_outlier",
+                    amount: r.amount,
+                    partner: r.partner,
+                    txId: r.txId,
+                    datasetStats: baseStats,
+                    additionalContext: { anomalyScore: s },
+                };
+                const t = await createAIContextualizedThreat(companyId, uploadId, r.id, "suspicious_pattern", 0.7, context);
+                threatsCreated.push(t);
+            }
+        }
+    }
+
+    // 5) Similarity search (local + cross-company) for each record that has embedding
+    for (const r of records) {
+        if (!r.embeddingJson) continue;
+        const emb: number[] = (r.embeddingJson as any) || [];
+        if (!emb.length) continue;
+        const { local, global } = await findSimilarForEmbedding(companyId, emb);
+
+        const localHit = local.find((n) => n.id !== r.id && n.distance < 0.08); // cosine distance threshold
+        const globalHit = global.find((n) => n.companyId !== companyId && n.distance < 0.06);
+
+        if (localHit || globalHit) {
+            const context: ThreatContext = {
+                threatType: "similar_to_known_fraud",
+                amount: r.amount,
+                partner: r.partner,
+                txId: r.txId,
+                datasetStats: baseStats,
+                additionalContext: { localHit, globalHit },
+            }
+            as any;
+            const t = await createAIContextualizedThreat(companyId, uploadId, r.id, "similarity_match", 0.85, context);
+            threatsCreated.push(t);
+        }
+    }
+
+    // 6) Rules engine (company custom rules)
+    const rules = await prisma.rule.findMany({ where: { companyId: companyId, enabled: true } });
+    for (const r of records) {
+        const hits = evaluateRules(rules as any, { amount: r.amount, currency: r.currency, partner: r.partner, mcc: (r as any).mcc });
+        for (const h of hits) {
+            const context: ThreatContext = {
+                threatType: "rule_trigger",
+                amount: r.amount,
+                partner: r.partner,
+                txId: r.txId,
+                datasetStats: baseStats,
+                additionalContext: { ruleId: h.ruleId, reason: h.reason },
+            }
+            as any;
+            const t = await createAIContextualizedThreat(companyId, uploadId, r.id, "rule_trigger", 0.8, context);
+            threatsCreated.push(t);
+        }
+    }
+
+    // Summarize & notify
+    const total = records.length;
+    const flagged = threatsCreated.length;
+    const flaggedValue = records
+        .filter((r) => threatsCreated.find((t) => t.recordId === r.id))
+        .reduce((sum, r) => sum + (r.amount ? ? 0), 0);
+
+    const summary = {
+        totalRecords: total,
+        flagged,
+        flaggedValue,
+        message: `Analyzed ${total} rows → flagged ${flagged} suspicious (${((flagged / total) * 100).toFixed(1)}%), worth ~$${flaggedValue.toFixed(2)}.`,
+    };
+
+    // Create Alerts + push socket + webhooks
+    for (const t of threatsCreated) {
+        const title = `${t.threatType.replace(/_/g, " ")}`;
+        const summaryTxt = t.description.slice(0, 240);
+        await createAndDispatchAlert({ companyId, recordId: t.recordId, threatId: t.id, title, summary: summaryTxt, severity: "high", payload: t });
+        await dispatchEnterpriseWebhooks(companyId, { type: "threat.created", data: t });
+    }
+
+    return { threatsCreated, summary };
+}
+
+async function createAIContextualizedThreat(companyId: string, uploadId: string, recordId: string, threatType: string, confidenceScore: number, context: ThreatContext) {
+    const aiExplanation = await generateThreatExplanation(context);
+    return prisma.threat.create({
+        data: { companyId, uploadId, recordId, threatType, description: aiExplanation, confidenceScore },
+    });
+}
+
+
+// =============================================
+// src/controllers/upload.ts  (UPDATED for company + TiDB vector writes)
+// =============================================
+import { Request, Response, NextFunction } from "express";
+import { prisma } from "../config/db";
+import { parseBuffer } from "../services/fileParser";
+import { detectLeaks } from "../services/leakDetection";
+import { getEmbedding } from "../services/aiEmbedding";
+import { saveRecordEmbedding } from "../services/vectorStore";
+import { enrich } from "../services/enrichment";
+
+export async function handleFileUpload(req: Request, res: Response, next: NextFunction) {
+    try {
+        if (!req.file) return res.status(400).json({ error: "No file uploaded" });
+        const companyId = req.body.companyId as string; // from auth/session in real app
+        if (!companyId) return res.status(400).json({ error: "Missing companyId" });
+
+        const buffer = req.file.buffer;
+        const fileName = req.file.originalname;
+        const fileType = req.file.mimetype;
+
+        const ext = fileName.split(".").pop() ? .toLowerCase();
+        if (!ext || !["csv", "xlsx", "xls"].includes(ext)) {
+            return res.status(400).json({ error: "Unsupported file format. Please upload CSV or Excel files only." });
+        }
+
+        const upload = await prisma.upload.create({ data: { companyId, fileName, fileType, source: "batch" } });
+        const parsedRecords = await parseBuffer(buffer, fileName);
+
+        // Insert rows, enrich and embed per-row (batched)
+        const created: any[] = [];
+        for (const r of parsedRecords) {
+            const meta = await enrich(r);
+            const rec = await prisma.record.create({
+                data: {
+                    companyId,
+                    uploadId: upload.id,
+                    txId: r.txId ? ? null,
+                    partner: r.partner ? ? null,
+                    amount: r.amount ? ? null,
+                    currency: (r as any).currency ? ? null,
+                    date: r.date ? new Date(r.date) : null,
+                    raw: r.raw ? ? {},
+                    ip: meta.ip,
+                    device: meta.device,
+                    geoCountry: meta.geoCountry,
+                    geoCity: meta.geoCity,
+                    mcc: meta.mcc,
+                    channel: meta.channel,
+                },
+            });
+            created.push(rec);
+        }
+
+        // Embeddings in small batches to respect rate limits
+        for (const rec of created) {
+            const text = `${rec.txId ?? ""} ${rec.partner ?? ""} ${rec.amount ?? ""}`;
+            try {
+                const vector = await getEmbedding(text);
+                await saveRecordEmbedding(rec.id, vector);
+            } catch (err) {
+                console.error("Embedding failed for record:", rec.id, err);
+            }
+        }
+
+        // Fetch back (with embeddings) for analysis
+        const inserted = await prisma.record.findMany({ where: { uploadId: upload.id }, orderBy: { createdAt: "asc" } });
+
+        const { threatsCreated, summary } = await detectLeaks(inserted, upload.id, companyId);
+
+        return res.json({ uploadId: upload.id, recordsAnalyzed: inserted.length, threats: threatsCreated, summary });
+    } catch (err) {
+        next(err);
+    }
+}
+
+
+// =============================================
+// src/controllers/ingestWebhook.ts  (event-driven ingestion)
+// =============================================
+import { Request, Response } from "express";
+import { prisma } from "../config/db";
+import { getEmbedding } from "../services/aiEmbedding";
+import { enrich } from "../services/enrichment";
+import { saveRecordEmbedding } from "../services/vectorStore";
+import { detectLeaks } from "../services/leakDetection";
+
+export async function ingestEventWebhook(req: Request, res: Response) {
+    const companyId = req.query.companyId as string; // or from auth
+    if (!companyId) return res.status(400).json({ error: "companyId required" });
+
+    const event = req.body; // {txId, partner, amount, currency, date, ip, device, ...}
+
+    // Create pseudo-upload to bucket events by day/hour
+    const upload = await prisma.upload.create({ data: { companyId, fileName: `webhook-${Date.now()}.json`, fileType: "application/json", source: "webhook" } });
+
+    const meta = await enrich(event);
+    const rec = await prisma.record.create({
+        data: {
+            companyId,
+            uploadId: upload.id,
+            txId: event.txId ? ? null,
+            partner: event.partner ? ? null,
+            amount: event.amount ? ? null,
+            currency: event.currency ? ? null,
+            date: event.date ? new Date(event.date) : new Date(),
+            raw: event,
+            ip: meta.ip,
+            device: meta.device,
+            geoCountry: meta.geoCountry,
+            geoCity: meta.geoCity,
+            mcc: meta.mcc,
+            channel: meta.channel ? ? "api",
+        },
+    });
+
+    try {
+        const emb = await getEmbedding(`${rec.txId ?? ""} ${rec.partner ?? ""} ${rec.amount ?? ""}`);
+        await saveRecordEmbedding(rec.id, emb);
+    } catch {}
+
+    const { threatsCreated, summary } = await detectLeaks([rec], upload.id, companyId);
+
+    res.json({ ok: true, threats: threatsCreated, summary });
+}
+
+
+// =============================================
+// src/controllers/alerts.ts
+// =============================================
+import { Request, Response } from "express";
+import { prisma } from "../config/db";
+
+export async function listAlerts(req: Request, res: Response) {
+    const companyId = req.query.companyId as string;
+    const rows = await prisma.alert.findMany({ where: { companyId }, orderBy: { createdAt: "desc" }, take: 200 });
+    res.json(rows);
+}
+
+// =============================================
+// src/controllers/ingestWebhook.ts
+// =============================================
+server / src / controllers / ingestWebhook.ts
+
+
+// =============================================
+// src/routes/index.ts
+// =============================================
+import { Router } from "express";
+import { handleFileUpload } from "../controllers/upload";
+import { ingestEventWebhook } from "../controllers/ingestWebhook";
+import { listAlerts } from "../controllers/alerts";
+import { multerConfig } from "../middleware/multer";
+
+export const router = Router();
+
+router.post("/", multerConfig, handleFileUpload);
+router.post("/ingest/webhook", ingestEventWebhook);
+router.get("/alerts", listAlerts);
+
+
+// =============================================
+// src/middleware/multer.ts
+// =============================================
+import { Request } from "express";
+import multer, { FileFilterCallback } from "multer";
+
+const fileFilter = (_req: Request, _file: Express.Multer.File, cb: FileFilterCallback) => {
+    cb(null, true);
+};
+
+const storage = multer.memoryStorage();
+
+export const multerConfig = multer({
+    storage,
+    fileFilter,
+}).single("file");
+
+
+
+// =============================================
+// server/src/app.ts
+// =============================================
+import express from "express";
+import "dotenv/config";
+import cors from "cors";
+
+import { router } from "./routes";
+
+const app = express();
+
+app.use(cors());
+app.use(express.json());
+
+app.use("/api/v1/upload", router);
+
+export default app;
+
+// =============================================
+// server/src/server.ts
+// =============================================
+import app from "./app";
+import http from "http";
+import { Server } from "socket.io";
+import { connectDB } from "./config/db";
+import { attachSocket } from "./config/socket";
+
+const server = http.createServer(app);
+const PORT = process.env.PORT || 8080;
+
+async function startServer() {
+    await connectDB();
+    attachSocket(app);
+    server.listen(PORT, () => {
+        console.log(`Server is running on port ${PORT}`);
+    });
+}
+
+startServer().catch((err) => {
+    console.error("Failed to start server:", err);
+    process.exit(1);
+});
+
+// =============================================
+// workers/streamRabbit.ts
+// =============================================
+import amqp from "amqplib";
+import { env } from "../src/config/env";
+import { prisma } from "../src/config/db";
+import { saveRecordEmbedding } from "../src/services/vectorStore";
+import { getEmbedding } from "../src/services/aiEmbedding";
+import { enrich } from "../src/services/enrichment";
+import { detectLeaks } from "../src/services/leakDetection";
+
+async function main() {
+    const conn = await amqp.connect(env.RABBIT_URL || "amqp://localhost");
+    const ch = await conn.createChannel();
+    const q = "transactions";
+    await ch.assertQueue(q, { durable: true });
+    ch.consume(q, async(msg) => {
+        if (!msg) return;
+        const evt = JSON.parse(msg.content.toString());
+        const companyId = evt.companyId;
+        const upload = await prisma.upload.create({ data: { companyId, fileName: `rabbit-${Date.now()}`, fileType: "application/json", source: "rabbit" } });
+        const meta = await enrich(evt);
+        const rec = await prisma.record.create({ data: { companyId, uploadId: upload.id, txId: evt.txId ? ? null, partner: evt.partner ? ? null, amount: evt.amount ? ? null, currency: evt.currency ? ? null, date: evt.date ? new Date(evt.date) : new Date(), raw: evt, ...meta } });
+        try {
+            const emb = await getEmbedding(`${rec.txId ?? ""} ${rec.partner ?? ""} ${rec.amount ?? ""}`);
+            await saveRecordEmbedding(rec.id, emb);
+        } catch {}
+        await detectLeaks([rec], upload.id, companyId);
+        ch.ack(msg);
+    });
+}
+main().catch(console.error);

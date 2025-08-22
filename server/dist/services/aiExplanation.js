@@ -24,8 +24,8 @@ const openaiClient = new openai_1.default({
 function generateThreatExplanation(context) {
     return __awaiter(this, void 0, void 0, function* () {
         var _a, _b, _c, _d;
-        // Build the prompt based on threat type
-        const prompt = buildPrompt(context);
+        // Build the prompt based on threat type and whether we're using local AI
+        const prompt = buildPrompt(context, USE_LOCAL_AI);
         if (USE_LOCAL_AI) {
             try {
                 // Call your local AI server's chat endpoint
@@ -33,7 +33,7 @@ function generateThreatExplanation(context) {
                     method: "POST",
                     headers: { "Content-Type": "application/json" },
                     body: JSON.stringify({
-                        model: "local-model", // Adjust based on your local server
+                        model: "local-model",
                         messages: [{ role: "user", content: prompt }],
                         max_tokens: 200,
                         temperature: 0.3,
@@ -54,10 +54,10 @@ function generateThreatExplanation(context) {
             // Use OpenAI
             try {
                 const response = yield openaiClient.chat.completions.create({
-                    model: "gpt-3.5-turbo", // or "gpt-4" for better results
+                    model: "gpt-3.5-turbo",
                     messages: [{ role: "user", content: prompt }],
                     max_tokens: 200,
-                    temperature: 0.3, // Lower temperature for more factual responses
+                    temperature: 0.3,
                 });
                 return ((_d = (_c = response.choices[0]) === null || _c === void 0 ? void 0 : _c.message) === null || _d === void 0 ? void 0 : _d.content) || fallbackExplanation(context);
             }
@@ -68,9 +68,8 @@ function generateThreatExplanation(context) {
         }
     });
 }
-function buildPrompt(context) {
-    var _a;
-    const { threatType, amount, partner, txId, datasetStats, additionalContext } = context;
+function buildPrompt(context, forLocalAI = false) {
+    const { amount, partner, txId } = context;
     // Collect transaction details
     const transactionDetails = [];
     if (amount !== null && amount !== undefined) {
@@ -82,7 +81,47 @@ function buildPrompt(context) {
     if (txId) {
         transactionDetails.push(`Transaction ID: ${txId}`);
     }
-    // Base role instruction
+    if (forLocalAI) {
+        // SIMPLIFIED PROMPT for local models
+        return buildLocalAIPrompt(context, transactionDetails);
+    }
+    else {
+        // COMPREHENSIVE PROMPT for OpenAI
+        return buildOpenAIPrompt(context, transactionDetails);
+    }
+}
+function buildLocalAIPrompt(context, transactionDetails) {
+    var _a;
+    const { threatType, datasetStats, additionalContext } = context;
+    let issueDescription = "";
+    switch (threatType) {
+        case "duplicate_tx":
+            issueDescription = `This transaction appears ${additionalContext === null || additionalContext === void 0 ? void 0 : additionalContext.count} times (duplicate detected).`;
+            break;
+        case "amount_outlier":
+            issueDescription = `Unusually large amount. Average is $${(_a = datasetStats === null || datasetStats === void 0 ? void 0 : datasetStats.mean) === null || _a === void 0 ? void 0 : _a.toFixed(2)}, this is much higher.`;
+            break;
+        case "invalid_amount":
+            issueDescription = `Invalid amount (zero or negative value).`;
+            break;
+        case "ml_outlier":
+            issueDescription = `Suspicious pattern detected compared to normal transactions.`;
+            break;
+        default:
+            issueDescription = `Suspicious activity detected.`;
+    }
+    return `Write a short business explanation about this transaction:
+
+Transaction: ${transactionDetails.join(", ")}
+
+Problem: ${issueDescription}
+
+Explain why this looks suspicious, what risk it could cause, and what should be done about it. Use simple business language.`;
+}
+function buildOpenAIPrompt(context, transactionDetails) {
+    var _a;
+    const { threatType, amount, datasetStats, additionalContext } = context;
+    // Base role instruction (comprehensive for OpenAI)
     const basePrompt = `You are an expert financial risk analyst preparing a leak detection report for business leaders. 
 Your job: write a clear, professional explanation of a suspicious transaction. 
 ALWAYS include:
