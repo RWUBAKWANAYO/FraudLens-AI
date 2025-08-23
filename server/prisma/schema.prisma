@@ -28,13 +28,14 @@ model Upload {
   fileName  String
   fileType  String
   source    String   @default("batch")
+  fileHash  String?
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
   records   Record[]
   threats   Threat[]
   company   Company  @relation(fields: [companyId], references: [id], onDelete: Cascade)
 
-  @@index([companyId, createdAt])
+  @@index([companyId, fileHash, createdAt])
 }
 
 model Record {
@@ -64,12 +65,24 @@ model Record {
   upload        Upload                      @relation(fields: [uploadId], references: [id], onDelete: Cascade)
   threats       Threat[]
 
-  @@index([companyId, date])
-  @@index([companyId, partner])
+  normalizedPartner  String?
+  normalizedCurrency String?
+  userKey            String?
+  accountKey         String?
+  accountMasked      String?
+  timeBucket30s      Int?
+  timeBucket60s      Int?
+  canonicalKey       String? // userKey|normalizedPartner|amount|currency|bucket30s (hashed)
+  recordSignature    String? // for same-upload idempotency
+
   @@index([companyId, txId])
-  @@index([uploadId], map: "Record_uploadId_fkey")
-  @@index([companyId, date], map: "idx_record_company_date")
-  @@index([companyId, partner], map: "idx_record_company_partner")
+  @@index([companyId, canonicalKey])
+  @@index([companyId, userKey, timeBucket30s])
+  @@index([companyId, createdAt])
+  @@index([companyId, accountKey])
+  @@index([uploadId])
+  @@index([companyId, txId, normalizedPartner, amount, normalizedCurrency, date], map: "idx_company_txid_full")
+  @@index([companyId, normalizedPartner, amount, normalizedCurrency, date], map: "idx_company_strict_tuple")
 }
 
 model Threat {
@@ -128,14 +141,17 @@ model WebhookSubscription {
 }
 
 model Rule {
-  id         String   @id @default(uuid())
-  companyId  String
-  name       String
-  definition Json
-  enabled    Boolean  @default(true)
-  createdAt  DateTime @default(now())
-  updatedAt  DateTime @updatedAt
-  company    Company  @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  id          String   @id @default(uuid())
+  companyId   String
+  name        String
+  description String?  @db.Text // Add description field
+  definition  Json
+  enabled     Boolean  @default(true)
+  priority    Int      @default(0) // Add priority field
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  company     Company  @relation(fields: [companyId], references: [id], onDelete: Cascade)
 
   @@index([companyId], map: "Rule_companyId_fkey")
+  @@index([companyId, priority]) // Add index for priority
 }

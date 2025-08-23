@@ -13,193 +13,161 @@ type Parsed = {
   currency?: string;
   description?: string;
   status?: string;
+  // NEW-ish: capture identity/instrument hints when present
+  user_id?: string;
+  account?: string;
+  card?: string;
+  bank_account?: string;
+  account_number?: string;
+  ip?: string;
+  device?: string;
   raw?: any;
   embeddingJson?: number[] | null;
 };
 
-// Fixed CSV buffer parser - removed header skipping logic
+// CSV
 export async function parseCSVBuffer(buffer: Buffer): Promise<Parsed[]> {
   const rows: Parsed[] = [];
   return new Promise((resolve, reject) => {
     const stream = require("stream");
     const readable = new stream.Readable();
-    readable._read = () => {}; // noop
+    readable._read = () => {};
     readable.push(buffer);
     readable.push(null);
 
-    let headers: string[] = [];
-
     readable
       .pipe(csvParser())
-      .on("headers", (receivedHeaders: string[]) => {
-        headers = receivedHeaders;
-        console.log("CSV Headers:", headers);
-      })
       .on("data", (row) => {
-        // Enhanced field detection with multiple possible field names
+        const pick = (...keys: string[]) => {
+          for (const k of keys) {
+            if (row[k] != null && row[k] !== "") return row[k];
+          }
+          return undefined;
+        };
+
         const amount =
           normalizeAmount(
-            row.amount ||
-              row.Amount ||
-              row.AMT ||
-              row.total ||
-              row.Total ||
-              row.amount_captured ||
-              row.amount_refunded ||
-              row.gross ||
-              0
+            pick("amount", "Amount", "AMT", "total", "Total", "gross", "amount_captured")
           ) || 0;
 
         const partner =
-          row.partner ||
-          row.vendor ||
-          row.merchant ||
-          row.Partner ||
-          row.description ||
-          row.Description ||
-          row.business_name ||
-          row.name ||
-          row.account_name ||
-          row["Merchant Name"] ||
-          null;
+          pick(
+            "partner",
+            "vendor",
+            "merchant",
+            "Partner",
+            "description",
+            "Description",
+            "business_name",
+            "name",
+            "account_name",
+            "Merchant Name"
+          ) || null;
 
         const txId =
-          row.txId ||
-          row.transaction_id ||
-          row.invoice ||
-          row.id ||
-          row.charge_id ||
-          row.payment_id ||
-          row["Transaction ID"] ||
-          null;
+          pick(
+            "txId",
+            "transaction_id",
+            "invoice",
+            "id",
+            "charge_id",
+            "payment_id",
+            "Transaction ID"
+          ) || null;
 
         const date = normalizeDate(
-          row.date ||
-            row.Date ||
-            row.created ||
-            row.timestamp ||
-            row.time ||
-            row["Created (UTC)"] ||
-            null
+          pick("date", "Date", "created", "timestamp", "time", "Created (UTC)") || null
         ) as any;
 
-        const email =
-          row.email ||
-          row.Email ||
-          row.customer_email ||
-          row["Customer Email"] ||
-          row.user_email ||
-          null;
-
         const currency =
-          row.currency ||
-          row.Currency ||
-          row.currency_code ||
-          row.curr ||
-          row["Currency Code"] ||
-          "usd";
-
-        const description =
-          row.description ||
-          row.Description ||
-          row.memo ||
-          row.notes ||
-          row["Transaction Description"] ||
-          null;
-
-        const status = row.status || row.Status || row.state || row["Transaction Status"] || null;
+          (pick("currency", "Currency", "currency_code", "curr", "Currency Code") as string) ||
+          "USD";
 
         rows.push({
-          txId,
-          partner,
+          txId: txId || undefined,
+          partner: partner || undefined,
           amount,
           date,
-          email,
+          email:
+            (pick("email", "Email", "customer_email", "Customer Email", "user_email") as string) ||
+            undefined,
           currency,
-          description,
-          status,
+          description:
+            (pick(
+              "description",
+              "Description",
+              "memo",
+              "notes",
+              "Transaction Description"
+            ) as string) || undefined,
+          status: (pick("status", "Status", "state", "Transaction Status") as string) || undefined,
+          // identity/instrument hints
+          user_id: (pick("user_id", "userId", "UserId") as string) || undefined,
+          account: (pick("account", "account_id") as string) || undefined,
+          card: (pick("card", "card_number") as string) || undefined,
+          bank_account: (pick("bank_account", "iban") as string) || undefined,
+          account_number: (pick("account_number") as string) || undefined,
+          ip: (pick("ip", "ip_address") as string) || undefined,
+          device: (pick("device", "device_id", "device_fingerprint") as string) || undefined,
           raw: row,
           embeddingJson: null,
         });
       })
-      .on("end", () => {
-        console.log(`Parsed ${rows.length} rows from CSV`);
-        resolve(rows);
-      })
+      .on("end", () => resolve(rows))
       .on("error", (err) => reject(err));
   });
 }
 
-// Enhanced Excel buffer parser
+// Excel stays similar but adds identity/instrument extraction
 export async function parseExcelBuffer(buffer: Buffer): Promise<Parsed[]> {
   const workbook = XLSX.read(buffer, { type: "buffer" });
-  const sheetName = workbook.SheetNames[0];
-  const sheet = workbook.Sheets[sheetName];
-
-  // Get headers
-  const range = XLSX.utils.decode_range(sheet["!ref"] || "A1");
-  const headers: string[] = [];
-  for (let C = range.s.c; C <= range.e.c; ++C) {
-    const cell = sheet[XLSX.utils.encode_cell({ r: range.s.r, c: C })];
-    headers.push(cell ? String(cell.v).toLowerCase() : `col_${C}`);
-  }
-
-  const json = XLSX.utils.sheet_to_json(sheet, { header: headers, range: 1 });
+  const sheet = workbook.Sheets[workbook.SheetNames[0]];
+  const json = XLSX.utils.sheet_to_json<any>(sheet, { defval: "" });
 
   return json.map((row: any) => {
-    const rowLower = Object.fromEntries(Object.entries(row).map(([k, v]) => [k.toLowerCase(), v]));
-
-    const dateVal = normalizeDate(
-      rowLower.date || rowLower.created || rowLower.timestamp || rowLower.time || null
+    const lower = Object.fromEntries(
+      Object.entries(row).map(([k, v]) => [String(k).toLowerCase(), v])
     );
-
-    // Helper to force string
-    const asString = (val: any): string | undefined => {
-      if (val == null) return undefined;
-      if (typeof val === "object") return String(val);
-      return String(val);
+    const pick = (...keys: string[]) => {
+      for (const k of keys) if (lower[k] != null && lower[k] !== "") return lower[k];
+      return undefined;
     };
+    const dateVal = normalizeDate(pick("date", "created", "timestamp", "time"));
 
     return {
-      txId:
-        asString(rowLower.txid) ||
-        asString(rowLower.transaction_id) ||
-        asString(rowLower.invoice) ||
-        asString(rowLower.id) ||
-        asString(rowLower.charge_id),
+      txId: (pick("txid", "transaction_id", "invoice", "id", "charge_id") as string) || undefined,
       partner:
-        asString(rowLower.partner) ||
-        asString(rowLower.vendor) ||
-        asString(rowLower.merchant) ||
-        asString(rowLower.business_name),
-      amount:
-        normalizeAmount(
-          rowLower.amount || rowLower.total || rowLower.amt || rowLower.value || rowLower.sum || 0
-        ) ?? 0,
-      date: dateVal ? dateVal.toISOString() : undefined,
-      customerEmail: asString(rowLower.email) || asString(rowLower.customer_email),
-      currency: asString(rowLower.currency) || asString(rowLower.currency_code),
-      description:
-        asString(rowLower.description) || asString(rowLower.memo) || asString(rowLower.notes),
-      status: asString(rowLower.status) || asString(rowLower.state),
-      fees: normalizeAmount(rowLower.fee || rowLower["fee"] || 0) ?? 0,
+        (pick("partner", "vendor", "merchant", "business_name", "name") as string) || undefined,
+      amount: normalizeAmount(pick("amount", "total", "amt", "value", "sum")) ?? 0,
+      date: dateVal ? (dateVal as Date).toISOString() : undefined,
+      email: (pick("email", "customer_email", "user_email") as string) || undefined,
+      currency: (pick("currency", "currency_code") as string) || "USD",
+      description: (pick("description", "memo", "notes") as string) || undefined,
+      status: (pick("status", "state") as string) || undefined,
+      user_id: (pick("user_id", "userid") as string) || undefined,
+      account: (pick("account", "account_id") as string) || undefined,
+      card: (pick("card", "card_number") as string) || undefined,
+      bank_account: (pick("bank_account", "iban") as string) || undefined,
+      account_number: (pick("account_number") as string) || undefined,
+      ip: (pick("ip", "ip_address") as string) || undefined,
+      device: (pick("device", "device_id", "device_fingerprint") as string) || undefined,
       raw: row,
       embeddingJson: null,
     };
   });
 }
 
-// Enhanced PDF buffer parser with proper text extraction
+// PDF unchanged except for types; keep as-is if you don’t rely on PDFs for v1.
 export async function parsePDFBuffer(buffer: Buffer): Promise<Parsed[]> {
-  const rows: Parsed[] = [];
-
+  const rows: any[] = [];
   try {
-    const data = await pdfParse(buffer);
-    let text = data.text || "";
+    const pdfParse = (await import("pdf-parse")).default;
+    let text = (await pdfParse(buffer)).text || "";
 
     if (!text || text.length < 20) {
       console.log("PDF seems scanned or pdf-parse failed, using OCR...");
-      const { data: ocrResult } = await Tesseract.recognize(buffer, "eng", { logger: (m) => {} });
+      const Tesseract = (await import("tesseract.js")).default;
+      const { data: ocrResult } = await Tesseract.recognize(buffer, "eng");
       text = ocrResult.text;
     }
 
@@ -244,25 +212,16 @@ export async function parsePDFBuffer(buffer: Buffer): Promise<Parsed[]> {
   return rows;
 }
 
-// Enhanced buffer parser dispatcher
 export async function parseBuffer(buffer: Buffer, fileName: string): Promise<Parsed[]> {
   const ext = fileName.split(".").pop()?.toLowerCase();
   if (!ext) return [];
-
   try {
     if (ext === "csv" || ext === "txt") return await parseCSVBuffer(buffer);
     if (ext === "xlsx" || ext === "xls") return await parseExcelBuffer(buffer);
     if (ext === "pdf") return await parsePDFBuffer(buffer);
   } catch (error) {
     console.error(`Error parsing ${ext} file:`, error);
-    // Fallback to simple text extraction
-    return [
-      {
-        raw: { content: buffer.toString("utf8") },
-        embeddingJson: null,
-      },
-    ];
+    return [{ raw: { content: buffer.toString("utf8") }, embeddingJson: null }];
   }
-
   return [];
 }

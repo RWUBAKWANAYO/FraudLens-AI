@@ -51,162 +51,109 @@ exports.parsePDFBuffer = parsePDFBuffer;
 exports.parseBuffer = parseBuffer;
 const csv_parser_1 = __importDefault(require("csv-parser"));
 const XLSX = __importStar(require("xlsx"));
-const pdf_parse_1 = __importDefault(require("pdf-parse"));
-const tesseract_js_1 = __importDefault(require("tesseract.js"));
 const normalizeData_1 = require("../utils/normalizeData");
-// Fixed CSV buffer parser - removed header skipping logic
+// CSV
 function parseCSVBuffer(buffer) {
     return __awaiter(this, void 0, void 0, function* () {
         const rows = [];
         return new Promise((resolve, reject) => {
             const stream = require("stream");
             const readable = new stream.Readable();
-            readable._read = () => { }; // noop
+            readable._read = () => { };
             readable.push(buffer);
             readable.push(null);
-            let headers = [];
             readable
                 .pipe((0, csv_parser_1.default)())
-                .on("headers", (receivedHeaders) => {
-                headers = receivedHeaders;
-                console.log("CSV Headers:", headers);
-            })
                 .on("data", (row) => {
-                // Enhanced field detection with multiple possible field names
-                const amount = (0, normalizeData_1.normalizeAmount)(row.amount ||
-                    row.Amount ||
-                    row.AMT ||
-                    row.total ||
-                    row.Total ||
-                    row.amount_captured ||
-                    row.amount_refunded ||
-                    row.gross ||
-                    0) || 0;
-                const partner = row.partner ||
-                    row.vendor ||
-                    row.merchant ||
-                    row.Partner ||
-                    row.description ||
-                    row.Description ||
-                    row.business_name ||
-                    row.name ||
-                    row.account_name ||
-                    row["Merchant Name"] ||
-                    null;
-                const txId = row.txId ||
-                    row.transaction_id ||
-                    row.invoice ||
-                    row.id ||
-                    row.charge_id ||
-                    row.payment_id ||
-                    row["Transaction ID"] ||
-                    null;
-                const date = (0, normalizeData_1.normalizeDate)(row.date ||
-                    row.Date ||
-                    row.created ||
-                    row.timestamp ||
-                    row.time ||
-                    row["Created (UTC)"] ||
-                    null);
-                const email = row.email ||
-                    row.Email ||
-                    row.customer_email ||
-                    row["Customer Email"] ||
-                    row.user_email ||
-                    null;
-                const currency = row.currency ||
-                    row.Currency ||
-                    row.currency_code ||
-                    row.curr ||
-                    row["Currency Code"] ||
-                    "usd";
-                const description = row.description ||
-                    row.Description ||
-                    row.memo ||
-                    row.notes ||
-                    row["Transaction Description"] ||
-                    null;
-                const status = row.status || row.Status || row.state || row["Transaction Status"] || null;
+                const pick = (...keys) => {
+                    for (const k of keys) {
+                        if (row[k] != null && row[k] !== "")
+                            return row[k];
+                    }
+                    return undefined;
+                };
+                const amount = (0, normalizeData_1.normalizeAmount)(pick("amount", "Amount", "AMT", "total", "Total", "gross", "amount_captured")) || 0;
+                const partner = pick("partner", "vendor", "merchant", "Partner", "description", "Description", "business_name", "name", "account_name", "Merchant Name") || null;
+                const txId = pick("txId", "transaction_id", "invoice", "id", "charge_id", "payment_id", "Transaction ID") || null;
+                const date = (0, normalizeData_1.normalizeDate)(pick("date", "Date", "created", "timestamp", "time", "Created (UTC)") || null);
+                const currency = pick("currency", "Currency", "currency_code", "curr", "Currency Code") ||
+                    "USD";
                 rows.push({
-                    txId,
-                    partner,
+                    txId: txId || undefined,
+                    partner: partner || undefined,
                     amount,
                     date,
-                    email,
+                    email: pick("email", "Email", "customer_email", "Customer Email", "user_email") ||
+                        undefined,
                     currency,
-                    description,
-                    status,
+                    description: pick("description", "Description", "memo", "notes", "Transaction Description") || undefined,
+                    status: pick("status", "Status", "state", "Transaction Status") || undefined,
+                    // identity/instrument hints
+                    user_id: pick("user_id", "userId", "UserId") || undefined,
+                    account: pick("account", "account_id") || undefined,
+                    card: pick("card", "card_number") || undefined,
+                    bank_account: pick("bank_account", "iban") || undefined,
+                    account_number: pick("account_number") || undefined,
+                    ip: pick("ip", "ip_address") || undefined,
+                    device: pick("device", "device_id", "device_fingerprint") || undefined,
                     raw: row,
                     embeddingJson: null,
                 });
             })
-                .on("end", () => {
-                console.log(`Parsed ${rows.length} rows from CSV`);
-                resolve(rows);
-            })
+                .on("end", () => resolve(rows))
                 .on("error", (err) => reject(err));
         });
     });
 }
-// Enhanced Excel buffer parser
+// Excel stays similar but adds identity/instrument extraction
 function parseExcelBuffer(buffer) {
     return __awaiter(this, void 0, void 0, function* () {
         const workbook = XLSX.read(buffer, { type: "buffer" });
-        const sheetName = workbook.SheetNames[0];
-        const sheet = workbook.Sheets[sheetName];
-        // Get headers
-        const range = XLSX.utils.decode_range(sheet["!ref"] || "A1");
-        const headers = [];
-        for (let C = range.s.c; C <= range.e.c; ++C) {
-            const cell = sheet[XLSX.utils.encode_cell({ r: range.s.r, c: C })];
-            headers.push(cell ? String(cell.v).toLowerCase() : `col_${C}`);
-        }
-        const json = XLSX.utils.sheet_to_json(sheet, { header: headers, range: 1 });
+        const sheet = workbook.Sheets[workbook.SheetNames[0]];
+        const json = XLSX.utils.sheet_to_json(sheet, { defval: "" });
         return json.map((row) => {
-            var _a, _b;
-            const rowLower = Object.fromEntries(Object.entries(row).map(([k, v]) => [k.toLowerCase(), v]));
-            const dateVal = (0, normalizeData_1.normalizeDate)(rowLower.date || rowLower.created || rowLower.timestamp || rowLower.time || null);
-            // Helper to force string
-            const asString = (val) => {
-                if (val == null)
-                    return undefined;
-                if (typeof val === "object")
-                    return String(val);
-                return String(val);
+            var _a;
+            const lower = Object.fromEntries(Object.entries(row).map(([k, v]) => [String(k).toLowerCase(), v]));
+            const pick = (...keys) => {
+                for (const k of keys)
+                    if (lower[k] != null && lower[k] !== "")
+                        return lower[k];
+                return undefined;
             };
+            const dateVal = (0, normalizeData_1.normalizeDate)(pick("date", "created", "timestamp", "time"));
             return {
-                txId: asString(rowLower.txid) ||
-                    asString(rowLower.transaction_id) ||
-                    asString(rowLower.invoice) ||
-                    asString(rowLower.id) ||
-                    asString(rowLower.charge_id),
-                partner: asString(rowLower.partner) ||
-                    asString(rowLower.vendor) ||
-                    asString(rowLower.merchant) ||
-                    asString(rowLower.business_name),
-                amount: (_a = (0, normalizeData_1.normalizeAmount)(rowLower.amount || rowLower.total || rowLower.amt || rowLower.value || rowLower.sum || 0)) !== null && _a !== void 0 ? _a : 0,
+                txId: pick("txid", "transaction_id", "invoice", "id", "charge_id") || undefined,
+                partner: pick("partner", "vendor", "merchant", "business_name", "name") || undefined,
+                amount: (_a = (0, normalizeData_1.normalizeAmount)(pick("amount", "total", "amt", "value", "sum"))) !== null && _a !== void 0 ? _a : 0,
                 date: dateVal ? dateVal.toISOString() : undefined,
-                customerEmail: asString(rowLower.email) || asString(rowLower.customer_email),
-                currency: asString(rowLower.currency) || asString(rowLower.currency_code),
-                description: asString(rowLower.description) || asString(rowLower.memo) || asString(rowLower.notes),
-                status: asString(rowLower.status) || asString(rowLower.state),
-                fees: (_b = (0, normalizeData_1.normalizeAmount)(rowLower.fee || rowLower["fee"] || 0)) !== null && _b !== void 0 ? _b : 0,
+                email: pick("email", "customer_email", "user_email") || undefined,
+                currency: pick("currency", "currency_code") || "USD",
+                description: pick("description", "memo", "notes") || undefined,
+                status: pick("status", "state") || undefined,
+                user_id: pick("user_id", "userid") || undefined,
+                account: pick("account", "account_id") || undefined,
+                card: pick("card", "card_number") || undefined,
+                bank_account: pick("bank_account", "iban") || undefined,
+                account_number: pick("account_number") || undefined,
+                ip: pick("ip", "ip_address") || undefined,
+                device: pick("device", "device_id", "device_fingerprint") || undefined,
                 raw: row,
                 embeddingJson: null,
             };
         });
     });
 }
-// Enhanced PDF buffer parser with proper text extraction
+// PDF unchanged except for types; keep as-is if you don’t rely on PDFs for v1.
 function parsePDFBuffer(buffer) {
     return __awaiter(this, void 0, void 0, function* () {
         const rows = [];
         try {
-            const data = yield (0, pdf_parse_1.default)(buffer);
-            let text = data.text || "";
+            const pdfParse = (yield Promise.resolve().then(() => __importStar(require("pdf-parse")))).default;
+            let text = (yield pdfParse(buffer)).text || "";
             if (!text || text.length < 20) {
                 console.log("PDF seems scanned or pdf-parse failed, using OCR...");
-                const { data: ocrResult } = yield tesseract_js_1.default.recognize(buffer, "eng", { logger: (m) => { } });
+                const Tesseract = (yield Promise.resolve().then(() => __importStar(require("tesseract.js")))).default;
+                const { data: ocrResult } = yield Tesseract.recognize(buffer, "eng");
                 text = ocrResult.text;
             }
             const lines = text
@@ -248,7 +195,6 @@ function parsePDFBuffer(buffer) {
         return rows;
     });
 }
-// Enhanced buffer parser dispatcher
 function parseBuffer(buffer, fileName) {
     return __awaiter(this, void 0, void 0, function* () {
         var _a;
@@ -265,13 +211,7 @@ function parseBuffer(buffer, fileName) {
         }
         catch (error) {
             console.error(`Error parsing ${ext} file:`, error);
-            // Fallback to simple text extraction
-            return [
-                {
-                    raw: { content: buffer.toString("utf8") },
-                    embeddingJson: null,
-                },
-            ];
+            return [{ raw: { content: buffer.toString("utf8") }, embeddingJson: null }];
         }
         return [];
     });
