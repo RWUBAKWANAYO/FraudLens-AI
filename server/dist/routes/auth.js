@@ -1,0 +1,18 @@
+"use strict";
+Object.defineProperty(exports, "__esModule", { value: true });
+exports.authRouter = void 0;
+// server/src/routes/auth.ts
+const express_1 = require("express");
+const authController_1 = require("../controllers/authController");
+const validation_1 = require("../middleware/validation");
+const auth_1 = require("../middleware/auth");
+const router = (0, express_1.Router)();
+exports.authRouter = router;
+router.post("/register", validation_1.registerValidation, validation_1.validateRequest, authController_1.AuthController.register);
+router.get("/verify-email", authController_1.AuthController.verifyEmail);
+router.post("/login", validation_1.loginValidation, validation_1.validateRequest, authController_1.AuthController.login);
+router.post("/invite", auth_1.authenticateToken, (0, auth_1.requireRole)(["ADMIN", "MANAGER"]), validation_1.inviteUserValidation, validation_1.validateRequest, authController_1.AuthController.inviteUser);
+router.post("/accept-invitation", authController_1.AuthController.acceptInvitation);
+router.post("/forgot-password", validation_1.forgotPasswordValidation, validation_1.validateRequest, authController_1.AuthController.forgotPassword);
+router.post("/reset-password", validation_1.resetPasswordValidation, validation_1.validateRequest, authController_1.AuthController.resetPassword);
+router.get("/me", auth_1.authenticateToken, authController_1.AuthController.getCurrentUser);

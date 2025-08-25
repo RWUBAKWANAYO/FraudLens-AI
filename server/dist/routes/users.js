@@ -1,0 +1,12 @@
+"use strict";
+Object.defineProperty(exports, "__esModule", { value: true });
+exports.usersRouter = void 0;
+// server/src/routes/users.ts
+const express_1 = require("express");
+const userController_1 = require("../controllers/userController");
+const auth_1 = require("../middleware/auth");
+const router = (0, express_1.Router)();
+exports.usersRouter = router;
+router.get("/", auth_1.authenticateToken, userController_1.UserController.getUsers);
+router.patch("/:userId/role", auth_1.authenticateToken, (0, auth_1.requireRole)(["ADMIN"]), userController_1.UserController.updateUserRole);
+router.delete("/:userId", auth_1.authenticateToken, (0, auth_1.requireRole)(["ADMIN"]), userController_1.UserController.removeUser);
