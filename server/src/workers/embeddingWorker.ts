@@ -2,48 +2,264 @@ import { consume } from "../queue/bus";
 import { prisma } from "../config/db";
 import { getEmbeddingsBatch } from "../services/aiEmbedding";
 import { saveRecordEmbedding } from "../services/vectorStore";
+import { redisPublisher } from "../services/redisPublisher";
+import { detectLeaks } from "../services/leakDetection";
+import { checkConnectionHealth } from "../queue/connectionManager";
+import { ErrorHandler } from "../utils/errorHandler";
 
-const CONCURRENCY = Number(process.env.WORKER_CONCURRENCY || 6);
+const CONCURRENCY = Number(process.env.WORKER_CONCURRENCY || 8);
+const EMBED_BATCH = Number(process.env.EMBED_BATCH || 32);
+const MAX_RETRIES = 3;
+const HEALTH_CHECK_INTERVAL = 30000; // 30 seconds
 
-function chunk<T>(arr: T[], size: number) {
-  const out: T[][] = [];
-  for (let i = 0; i < arr.length; i += size) out.push(arr.slice(i, i + size));
-  return out;
-}
+// Store interval reference
+let healthCheckInterval: NodeJS.Timeout;
+
+// Health check interval
+healthCheckInterval = setInterval(async () => {
+  try {
+    const isHealthy = await checkConnectionHealth();
+    if (!isHealthy) {
+      console.warn("RabbitMQ connection unhealthy, attempting to reconnect...");
+      // The connection manager will handle reconnection automatically
+    }
+  } catch (error) {
+    console.error("Health check failed:", error);
+  }
+}, HEALTH_CHECK_INTERVAL);
+
+// Add graceful shutdown for this worker
+process.on("SIGINT", () => {
+  console.log("SIGINT received, cleaning up embedding worker...");
+  if (healthCheckInterval) {
+    clearInterval(healthCheckInterval);
+  }
+});
+
+// Health check interval
+setInterval(async () => {
+  try {
+    const isHealthy = await checkConnectionHealth();
+    if (!isHealthy) {
+      console.warn("RabbitMQ connection unhealthy, attempting to reconnect...");
+      // The connection manager will handle reconnection automatically
+    }
+  } catch (error) {
+    console.error("Health check failed:", error);
+  }
+}, HEALTH_CHECK_INTERVAL);
 
 export async function startEmbeddingWorker() {
+  console.log("Starting embedding worker with connection resilience...");
+
   await consume("embeddings.generate", async (payload) => {
-    const { recordIds } = payload as { recordIds: string[] };
+    try {
+      const { recordIds, companyId, uploadId, originalFileName } = payload as {
+        recordIds: string[];
+        companyId: string;
+        uploadId: string;
+        originalFileName?: string;
+      };
 
-    // Grab only what we need to build the embedding text
-    const recs = await prisma.record.findMany({
-      where: { id: { in: recordIds } },
-      select: {
-        id: true,
-        normalizedPartner: true,
-        amount: true,
-        normalizedCurrency: true,
-        userKey: true,
-      },
-    });
+      console.log(`Processing upload ${uploadId}, ${recordIds.length} records`);
 
-    const texts = recs.map((r) => {
-      return `${r.normalizedPartner ?? ""} | ${r.amount ?? ""} ${r.normalizedCurrency ?? ""} | ${
-        r.userKey ?? ""
-      }`;
-    });
+      await redisPublisher.publishUploadProgress(
+        companyId,
+        uploadId,
+        0,
+        "queued",
+        "Upload queued for processing",
+        {
+          totalRecords: recordIds.length,
+          fileName: originalFileName,
+          startedAt: new Date().toISOString(),
+        }
+      );
 
-    // Batch call embedding API
-    const embeddings = await getEmbeddingsBatch(texts);
+      // Process embeddings with detailed progress
+      await processEmbeddingsWithProgress(recordIds, companyId, uploadId);
 
-    // Persist (limited parallelism)
-    const tasks = embeddings.map((emb, i) => async () => {
-      await saveRecordEmbedding(recs[i].id, emb);
-    });
+      // Run leak detection
+      await runLeakDetection(companyId, uploadId);
 
-    const groups = chunk(tasks, CONCURRENCY);
-    for (const g of groups) {
-      await Promise.all(g.map((fn) => fn()));
+      console.log(`Successfully processed upload ${uploadId}`);
+    } catch (error) {
+      console.error(`Failed to process upload:`, error);
+
+      // Try to get uploadId from error or payload
+      const uploadId = (payload as any)?.uploadId || "unknown";
+      const companyId = (payload as any)?.companyId || "unknown";
+
+      await redisPublisher.publishUploadError(
+        companyId,
+        uploadId,
+        ErrorHandler.getErrorMessage(error)
+      );
+
+      // Don't nack for connection errors to avoid infinite retries during outages
+      if (error instanceof Error && error.message.includes("ECONNRESET")) {
+        console.log("Connection error, message will be dead-lettered");
+        // Message will be handled by the bus layer
+      } else {
+        // Application error, retry later
+        throw error;
+      }
     }
   });
+}
+
+async function processEmbeddingsWithProgress(
+  recordIds: string[],
+  companyId: string,
+  uploadId: string
+) {
+  // Fix: Explicitly type the batches array
+  const batches: string[][] = [];
+  for (let i = 0; i < recordIds.length; i += EMBED_BATCH) {
+    batches.push(recordIds.slice(i, i + EMBED_BATCH));
+  }
+
+  await redisPublisher.publishUploadProgress(
+    companyId,
+    uploadId,
+    10,
+    "embeddings",
+    "Starting embedding generation",
+    { totalBatches: batches.length }
+  );
+
+  for (const [batchIndex, batch] of batches.entries()) {
+    const progress = 10 + Math.round((batchIndex / batches.length) * 40);
+
+    await redisPublisher.publishUploadProgress(
+      companyId,
+      uploadId,
+      progress,
+      "embeddings",
+      `Processing batch ${batchIndex + 1}/${batches.length}`,
+      {
+        currentBatch: batchIndex + 1,
+        totalBatches: batches.length,
+        recordsInBatch: batch.length,
+      }
+    );
+
+    await processBatchWithRetry(batch, MAX_RETRIES);
+  }
+
+  await redisPublisher.publishUploadProgress(
+    companyId,
+    uploadId,
+    50,
+    "embeddings_complete",
+    "All embeddings generated successfully",
+    { totalRecords: recordIds.length }
+  );
+}
+
+async function processBatchWithRetry(batch: string[], maxRetries: number) {
+  for (let attempt = 1; attempt <= maxRetries; attempt++) {
+    try {
+      const recs = await prisma.record.findMany({
+        where: { id: { in: batch } },
+        select: {
+          id: true,
+          normalizedPartner: true,
+          amount: true,
+          normalizedCurrency: true,
+          userKey: true,
+        },
+      });
+
+      const texts = recs.map(
+        (r) =>
+          `${r.normalizedPartner || ""} | ${r.amount || ""} ${r.normalizedCurrency || ""} | ${
+            r.userKey || ""
+          }`
+      );
+
+      const embeddings = await getEmbeddingsBatch(texts);
+
+      const savePromises = embeddings.map((emb, i) => saveRecordEmbedding(recs[i].id, emb));
+
+      for (let i = 0; i < savePromises.length; i += CONCURRENCY) {
+        await Promise.all(savePromises.slice(i, i + CONCURRENCY));
+      }
+
+      return;
+    } catch (error) {
+      if (attempt === maxRetries) throw error;
+      await new Promise((resolve) => setTimeout(resolve, attempt * 2000));
+    }
+  }
+}
+
+async function runLeakDetection(companyId: string, uploadId: string) {
+  await redisPublisher.publishUploadProgress(
+    companyId,
+    uploadId,
+    50,
+    "detection",
+    "Starting threat detection"
+  );
+
+  const records = await prisma.record.findMany({
+    where: { uploadId },
+    orderBy: { createdAt: "asc" },
+  });
+
+  const { threatsCreated, summary } = await detectLeaks(
+    records,
+    uploadId,
+    companyId,
+    async (progress, total, threats) => {
+      // progress is now a percentage between 50-95
+      await redisPublisher.publishUploadProgress(
+        companyId,
+        uploadId,
+        progress,
+        "detection",
+        `Analyzing records for threats (${progress}%)`,
+        {
+          recordsProcessed: Math.round(((progress - 50) / 45) * total),
+          totalRecords: total,
+          threatsFound: threats,
+        }
+      );
+    }
+  );
+
+  // Final completion
+  await redisPublisher.publishUploadProgress(
+    companyId,
+    uploadId,
+    100,
+    "complete",
+    "Analysis complete",
+    {
+      recordsAnalyzed: records.length,
+      threatsDetected: threatsCreated.length,
+    }
+  );
+
+  await redisPublisher.publishUploadComplete(
+    companyId,
+    uploadId,
+    {
+      recordsAnalyzed: records.length,
+      processingTime: Date.now() - (await getUploadStartTime(uploadId)),
+    },
+    threatsCreated,
+    summary
+  );
+
+  return { threatsCreated, summary };
+}
+
+async function getUploadStartTime(uploadId: string): Promise<number> {
+  const upload = await prisma.upload.findUnique({
+    where: { id: uploadId },
+    select: { createdAt: true },
+  });
+  return upload?.createdAt?.getTime() || Date.now();
 }

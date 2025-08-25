@@ -6,7 +6,6 @@ for performance purpose and project requirements.look at below data, think deep 
     // =============================================
     // .env.ts
     // =============================================
-
     PORT = 8080
 USE_LOCAL_AI = true
 LOCAL_AI_URL = "http://localhost:5001"
@@ -400,8 +399,7 @@ export async function handleFileUpload(req: Request, res: Response, next: NextFu
 // =============================================
 // src/services/leakDetection.ts (UPDATED to use similarity + rules + ML)
 // =============================================
-
-// server/src/services/detectLeaks.ts
+// server/src/services/leakDetection.ts
 import { prisma } from "../config/db";
 import type { Record as PrismaRecord, Prisma } from "@prisma/client";
 import { generateThreatExplanation, type ThreatContext } from "./aiExplanation";
@@ -430,6 +428,11 @@ const TS_TOLERANCE_SEC = Number(process.env.DUP_TS_TOLERANCE_SEC ? ? 30);
 const AMOUNT_TOLERANCE_CENTS = Number(process.env.DUP_AMOUNT_TOLERANCE_CENTS ? ? 0);
 const SIMILARITY_DUP_THRESHOLD = Number(process.env.SIM_DUP_THRESHOLD ? ? 0.85);
 const SIMILARITY_SUSPICIOUS_THRESHOLD = Number(process.env.SIM_SUS_THRESHOLD ? ? 0.75);
+
+// --- Performance settings ---
+const DB_QUERY_TIMEOUT = Number(process.env.DB_QUERY_TIMEOUT || 30000);
+const SIMILARITY_SEARCH_LIMIT = Number(process.env.SIMILARITY_SEARCH_LIMIT || 50);
+const SIMILARITY_BATCH_SIZE = Number(process.env.SIMILARITY_BATCH_SIZE || 10);
 
 // --- CreatedThreat shape ---
 type CreatedThreat = {
@@ -508,6 +511,7 @@ function isStrictDuplicate(a: PrismaRecord, b: PrismaRecord): boolean {
 }
 
 export async function detectLeaks(records: PrismaRecord[], uploadId: string, companyId: string) {
+    console.time("Total leak detection time");
     console.log(
         `[DETECT_LEAKS] Starting for upload ${uploadId}, company ${companyId}, ${records.length} records`
     );
@@ -646,93 +650,144 @@ export async function detectLeaks(records: PrismaRecord[], uploadId: string, com
     });
     console.log(`[SIMILARITY] Previous records with embeddings: ${previousRecordCount}`);
 
+    // --- Bulk fetch existing TXIDs and Canonical Keys for duplicate detection ---
+    console.time("Bulk duplicate check preparation");
+    const existingTxIds = new Set < string > ();
+    const existingCanonicalKeys = new Set < string > ();
+
+    // Fetch existing records in bulk
+    const txIds = records.map((r) => r.txId).filter(Boolean) as string[];
+    const canonicalKeys = records.map((r) => r.canonicalKey).filter(Boolean) as string[];
+
+    if (txIds.length > 0) {
+        const existingTxRecords = await prisma.record.findMany({
+            where: {
+                companyId,
+                txId: { in: txIds },
+                uploadId: { not: uploadId },
+            },
+            select: { txId: true, id: true },
+            take: 1000,
+        });
+        existingTxRecords.forEach((r) => existingTxIds.add(r.txId as string));
+    }
+
+    if (canonicalKeys.length > 0) {
+        const existingCanonicalRecords = await prisma.record.findMany({
+            where: {
+                companyId,
+                canonicalKey: { in: canonicalKeys },
+                uploadId: { not: uploadId },
+            },
+            select: { canonicalKey: true, id: true },
+            take: 1000,
+        });
+        existingCanonicalRecords.forEach((r) => existingCanonicalKeys.add(r.canonicalKey as string));
+    }
+    console.timeEnd("Bulk duplicate check preparation");
+
     // ---------------- Stage A: Historical (DB) strict duplicates ----------------
+    console.time("Historical duplicate detection");
     console.log("[DUPLICATES] Starting historical duplicate detection...");
-    // A1. Same TXID + same attributes (strict) in PRIOR uploads of the SAME company
+
+    // Pre-identify potential duplicates using bulk data
+    const historicalDuplicates: PrismaRecord[] = [];
+
     for (const rec of records) {
-        if (!rec.txId || alreadyFlaggedRecordIds.has(rec.id)) continue;
+        if (alreadyFlaggedRecordIds.has(rec.id)) continue;
 
-        const prev = await prisma.record.findMany({
-            where: {
-                companyId,
-                txId: rec.txId,
-                uploadId: { not: uploadId },
-            },
-            select: {
-                id: true,
-                txId: true,
-                partner: true,
-                normalizedPartner: true,
-                amount: true,
-                currency: true,
-                normalizedCurrency: true,
-                date: true,
-                createdAt: true,
-            },
-            orderBy: { createdAt: "desc" },
-            take: 50,
-        });
-
-        const matches = prev.filter((p) => isStrictDuplicate(rec, p));
-        if (matches.length > 0) {
-            await emit(
-                RULE.DUP_IN_DB__TXID, [rec], {
-                    threatType: RULE.DUP_IN_DB__TXID,
-                    amount: rec.amount ? ? null,
-                    partner: rec.partner ? ? null,
-                    txId: rec.txId ? ? null,
-                    datasetStats: baseStats,
-                    additionalContext: {
-                        scope: "db_prior_same_txid",
-                        priorCount: matches.length,
-                        priorIds: matches.slice(0, 5).map((m) => m.id),
-                    },
-                },
-                0.98,
-                "HIGH",
-                `dbtx:${rec.txId}:${rec.id}`
-            );
+        // Quick pre-check before expensive database query
+        if (rec.txId && existingTxIds.has(rec.txId)) {
+            historicalDuplicates.push(rec);
+        } else if (rec.canonicalKey && existingCanonicalKeys.has(rec.canonicalKey)) {
+            historicalDuplicates.push(rec);
         }
     }
 
-    // A2. Same Canonical Key (strict tuple) in PRIOR uploads of the SAME company
-    for (const rec of records) {
-        if (!rec.canonicalKey || alreadyFlaggedRecordIds.has(rec.id)) continue;
-
-        const prev = await prisma.record.findMany({
-            where: {
-                companyId,
-                canonicalKey: rec.canonicalKey,
-                uploadId: { not: uploadId },
-            },
-            select: { id: true },
-            orderBy: { createdAt: "desc" },
-            take: 50,
-        });
-
-        if (prev.length > 0) {
-            await emit(
-                RULE.DUP_IN_DB__CANONICAL, [rec], {
-                    threatType: RULE.DUP_IN_DB__CANONICAL,
-                    amount: rec.amount ? ? null,
-                    partner: rec.partner ? ? null,
-                    txId: rec.txId ? ? null,
-                    datasetStats: baseStats,
-                    additionalContext: {
-                        scope: "db_prior_same_canonical",
-                        canonicalKey: rec.canonicalKey,
-                        priorCount: prev.length,
-                        priorIds: prev.slice(0, 5).map((m) => m.id),
-                    },
+    // Process historical duplicates
+    for (const rec of historicalDuplicates) {
+        if (rec.txId && !alreadyFlaggedRecordIds.has(rec.id)) {
+            const prev = await prisma.record.findMany({
+                where: {
+                    companyId,
+                    txId: rec.txId,
+                    uploadId: { not: uploadId },
                 },
-                0.95,
-                "HIGH",
-                `dbcanon:${rec.canonicalKey}:${rec.id}`
-            );
+                select: {
+                    id: true,
+                    txId: true,
+                    partner: true,
+                    normalizedPartner: true,
+                    amount: true,
+                    currency: true,
+                    normalizedCurrency: true,
+                    date: true,
+                    createdAt: true,
+                },
+                orderBy: { createdAt: "desc" },
+                take: 50,
+            });
+
+            const matches = prev.filter((p) => isStrictDuplicate(rec, p));
+            if (matches.length > 0) {
+                await emit(
+                    RULE.DUP_IN_DB__TXID, [rec], {
+                        threatType: RULE.DUP_IN_DB__TXID,
+                        amount: rec.amount ? ? null,
+                        partner: rec.partner ? ? null,
+                        txId: rec.txId ? ? null,
+                        datasetStats: baseStats,
+                        additionalContext: {
+                            scope: "db_prior_same_txid",
+                            priorCount: matches.length,
+                            priorIds: matches.slice(0, 5).map((m) => m.id),
+                        },
+                    },
+                    0.98,
+                    "HIGH",
+                    `dbtx:${rec.txId}:${rec.id}`
+                );
+            }
+        }
+
+        if (rec.canonicalKey && !alreadyFlaggedRecordIds.has(rec.id)) {
+            const prev = await prisma.record.findMany({
+                where: {
+                    companyId,
+                    canonicalKey: rec.canonicalKey,
+                    uploadId: { not: uploadId },
+                },
+                select: { id: true },
+                orderBy: { createdAt: "desc" },
+                take: 50,
+            });
+
+            if (prev.length > 0) {
+                await emit(
+                    RULE.DUP_IN_DB__CANONICAL, [rec], {
+                        threatType: RULE.DUP_IN_DB__CANONICAL,
+                        amount: rec.amount ? ? null,
+                        partner: rec.partner ? ? null,
+                        txId: rec.txId ? ? null,
+                        datasetStats: baseStats,
+                        additionalContext: {
+                            scope: "db_prior_same_canonical",
+                            canonicalKey: rec.canonicalKey,
+                            priorCount: prev.length,
+                            priorIds: prev.slice(0, 5).map((m) => m.id),
+                        },
+                    },
+                    0.95,
+                    "HIGH",
+                    `dbcanon:${rec.canonicalKey}:${rec.id}`
+                );
+            }
         }
     }
+    console.timeEnd("Historical duplicate detection");
 
     // ---------------- Stage B: Batch (current upload) strict duplicates ----------------
+    console.time("Batch duplicate detection");
     console.log("[BATCH] Starting batch duplicate detection...");
     // B1. TXID clusters
     for (const [txId, list] of byTxId.entries()) {
@@ -805,110 +860,26 @@ export async function detectLeaks(records: PrismaRecord[], uploadId: string, com
             }
         );
     }
+    console.timeEnd("Batch duplicate detection");
 
-    // ------------------ Stage C: Vector similarity FIRST ----------------
+    // ------------------ Stage C: Vector similarity with batching ----------------
+    console.time("Similarity detection");
     console.log("[SIMILARITY] Starting similarity detection...");
-    let similarityChecks = 0;
-    let similarityMatches = 0;
 
     // Track which records have already been flagged by similarity to prevent double-counting
     const similarityFlaggedRecordIds = new Set < string > ();
 
-    for (const rec of records) {
-        if (alreadyFlaggedRecordIds.has(rec.id) || similarityFlaggedRecordIds.has(rec.id)) continue;
-
-        const embedding = parseEmbedding(rec.embeddingJson);
-        if (!embedding) {
-            console.log(`[SIMILARITY] Record ${rec.id} has no valid embedding`);
-            continue;
-        }
-
-        similarityChecks++;
-        console.log(`[SIMILARITY] Checking record ${rec.id} with embedding length ${embedding.length}`);
-
-        const { localPrev, global } = await findSimilarForEmbedding(
+    if (recordsWithEmbeddings.length > 0) {
+        await processSimilarityInBatches(
+            records.filter((r) => !alreadyFlaggedRecordIds.has(r.id) && r.embeddingJson),
             companyId,
             uploadId,
-            embedding,
-            10, { minScore: 0.5, useVectorIndex: true }
+            alreadyFlaggedRecordIds,
+            similarityFlaggedRecordIds,
+            emit
         );
-
-        console.log(
-            `[SIMILARITY] Record ${rec.id} - local matches: ${localPrev.length}, global: ${global.length}`
-        );
-
-        // Local near-duplicate
-        const bestLocal = localPrev
-            .filter((m) => m.similarity >= SIMILARITY_DUP_THRESHOLD)
-            .sort((a, b) => b.similarity - a.similarity)[0];
-
-        // Global suspicious similarity
-        const bestGlobal = global
-            .filter((m) => m.similarity >= SIMILARITY_SUSPICIOUS_THRESHOLD)
-            .sort((a, b) => b.similarity - a.similarity)[0];
-
-        // Prioritize local duplicates over global similarities
-        if (bestLocal) {
-            similarityMatches++;
-            similarityFlaggedRecordIds.add(rec.id); // Mark as flagged by similarity
-            console.log(
-                `[SIMILARITY] FOUND LOCAL MATCH: ${rec.id} -> ${
-          bestLocal.id
-        } (similarity: ${bestLocal.similarity.toFixed(4)})`
-            );
-            await emit(
-                RULE.SIMILARITY_MATCH, [rec], {
-                    threatType: RULE.SIMILARITY_MATCH,
-                    amount: rec.amount ? ? null,
-                    partner: rec.partner ? ? null,
-                    txId: rec.txId ? ? null,
-                    datasetStats: baseStats,
-                    additionalContext: {
-                        scope: "vector_local_prev",
-                        neighborId: bestLocal.id,
-                        neighborPartner: bestLocal.partner,
-                        neighborAmount: bestLocal.amount,
-                        similarity: bestLocal.similarity,
-                    },
-                },
-                0.96,
-                "HIGH",
-                `vecdup_prev:${rec.id}->${bestLocal.id}`
-            );
-        } else if (bestGlobal) {
-            similarityMatches++;
-            similarityFlaggedRecordIds.add(rec.id); // Mark as flagged by similarity
-            console.log(
-                `[SIMILARITY] FOUND GLOBAL MATCH: ${rec.id} -> ${
-          bestGlobal.id
-        } (similarity: ${bestGlobal.similarity.toFixed(4)})`
-            );
-            await emit(
-                RULE.SIMILARITY_MATCH, [rec], {
-                    threatType: RULE.SIMILARITY_MATCH,
-                    amount: rec.amount ? ? null,
-                    partner: rec.partner ? ? null,
-                    txId: rec.txId ? ? null,
-                    datasetStats: baseStats,
-                    additionalContext: {
-                        scope: "vector_global",
-                        neighborId: bestGlobal.id,
-                        neighborCompany: bestGlobal.companyId,
-                        neighborPartner: bestGlobal.partner,
-                        neighborAmount: bestGlobal.amount,
-                        similarity: bestGlobal.similarity,
-                    },
-                },
-                0.87,
-                "MEDIUM",
-                `vecsim:${rec.id}->${bestGlobal.id}`
-            );
-        }
     }
-
-    console.log(
-        `[SIMILARITY] Completed: ${similarityChecks} checks, ${similarityMatches} matches found`
-    );
+    console.timeEnd("Similarity detection");
 
     // ---------------- Summary ----------------
     const uniqueFlaggedRecords = new Set < string > (
@@ -944,7 +915,127 @@ export async function detectLeaks(records: PrismaRecord[], uploadId: string, com
         byRule,
     };
 
+    console.timeEnd("Total leak detection time");
     return { threatsCreated, summary };
+}
+
+// New function for batched similarity processing
+async function processSimilarityInBatches(
+    records: PrismaRecord[],
+    companyId: string,
+    uploadId: string,
+    alreadyFlaggedRecordIds: Set < string > ,
+    similarityFlaggedRecordIds: Set < string > ,
+    emit: Function
+) {
+    const batches = [];
+
+    for (let i = 0; i < records.length; i += SIMILARITY_BATCH_SIZE) {
+        batches.push(records.slice(i, i + SIMILARITY_BATCH_SIZE));
+    }
+
+    console.log(`Processing similarity in ${batches.length} batches`);
+
+    for (const [batchIndex, batch] of batches.entries()) {
+        console.log(`Similarity batch ${batchIndex + 1}/${batches.length}`);
+
+        const batchPromises = batch.map(async(rec) => {
+            if (alreadyFlaggedRecordIds.has(rec.id) || similarityFlaggedRecordIds.has(rec.id)) {
+                return;
+            }
+
+            const embedding = parseEmbedding(rec.embeddingJson);
+            if (!embedding) return;
+
+            try {
+                const { localPrev, global } = await findSimilarForEmbedding(
+                    companyId,
+                    uploadId,
+                    embedding,
+                    SIMILARITY_SEARCH_LIMIT, { minScore: 0.5, useVectorIndex: true }
+                );
+
+                // Local near-duplicate
+                const bestLocal = localPrev
+                    .filter((m) => m.similarity >= SIMILARITY_DUP_THRESHOLD)
+                    .sort((a, b) => b.similarity - a.similarity)[0];
+
+                // Global suspicious similarity
+                const bestGlobal = global
+                    .filter((m) => m.similarity >= SIMILARITY_SUSPICIOUS_THRESHOLD)
+                    .sort((a, b) => b.similarity - a.similarity)[0];
+
+                // Prioritize local duplicates over global similarities
+                if (bestLocal) {
+                    similarityFlaggedRecordIds.add(rec.id); // Mark as flagged by similarity
+                    console.log(
+                        `[SIMILARITY] FOUND LOCAL MATCH: ${rec.id} -> ${
+              bestLocal.id
+            } (similarity: ${bestLocal.similarity.toFixed(4)})`
+                    );
+                    await emit(
+                        RULE.SIMILARITY_MATCH, [rec], {
+                            threatType: RULE.SIMILARITY_MATCH,
+                            amount: rec.amount ? ? null,
+                            partner: rec.partner ? ? null,
+                            txId: rec.txId ? ? null,
+                            datasetStats: {
+                                mean: 0,
+                                max: 0,
+                                totalRecords: 0,
+                            },
+                            additionalContext: {
+                                scope: "vector_local_prev",
+                                neighborId: bestLocal.id,
+                                neighborPartner: bestLocal.partner,
+                                neighborAmount: bestLocal.amount,
+                                similarity: bestLocal.similarity,
+                            },
+                        },
+                        0.96,
+                        "HIGH",
+                        `vecdup_prev:${rec.id}->${bestLocal.id}`
+                    );
+                } else if (bestGlobal) {
+                    similarityFlaggedRecordIds.add(rec.id); // Mark as flagged by similarity
+                    console.log(
+                        `[SIMILARITY] FOUND GLOBAL MATCH: ${rec.id} -> ${
+              bestGlobal.id
+            } (similarity: ${bestGlobal.similarity.toFixed(4)})`
+                    );
+                    await emit(
+                        RULE.SIMILARITY_MATCH, [rec], {
+                            threatType: RULE.SIMILARITY_MATCH,
+                            amount: rec.amount ? ? null,
+                            partner: rec.partner ? ? null,
+                            txId: rec.txId ? ? null,
+                            datasetStats: {
+                                mean: 0,
+                                max: 0,
+                                totalRecords: 0,
+                            },
+                            additionalContext: {
+                                scope: "vector_global",
+                                neighborId: bestGlobal.id,
+                                neighborCompany: bestGlobal.companyId,
+                                neighborPartner: bestGlobal.partner,
+                                neighborAmount: bestGlobal.amount,
+                                similarity: bestGlobal.similarity,
+                            },
+                        },
+                        0.87,
+                        "MEDIUM",
+                        `vecsim:${rec.id}->${bestGlobal.id}`
+                    );
+                }
+            } catch (error) {
+                console.error(`Similarity search failed for record ${rec.id}:`, error);
+            }
+        });
+
+        // Process batch with timeout
+        await Promise.allSettled(batchPromises);
+    }
 }
 
 const AI_EXPLAIN_ASYNC = process.env.AI_EXPLAIN_ASYNC !== "false";
@@ -1093,6 +1184,7 @@ export function parseEmbedding(json: Prisma.JsonValue | null): number[] | null {
 
 /**
  * Vector search using TiDB VEC_COSINE_DISTANCE with safe fallback.
+ * Optimized with parallel queries and timeout protection.
  */
 export async function findSimilarForEmbedding(
     companyId: string,
@@ -1108,152 +1200,171 @@ export async function findSimilarForEmbedding(
         `[SIMILARITY_SEARCH] Starting for company ${companyId}, embedding length: ${embedding.length}`
     );
 
-    // ---- Prefer native vector index if available ----
-    if (preferVector) {
-        try {
-            console.log("[SIMILARITY_SEARCH] Attempting TiDB vector search...");
-            const vecText = JSON.stringify(embedding);
-
-            const localRows = await prisma.$queryRaw < Array < SimilarRecord & { distance ? : number } >> `
-        SELECT
-          id, companyId, uploadId, txId, partner, amount, date,
-          1 - VEC_COSINE_DISTANCE(embeddingVec, ${vecText}) AS similarity
-        FROM Record
-        WHERE companyId = ${companyId}
-          AND (${uploadId} IS NULL OR uploadId <> ${uploadId})
-          AND embeddingVec IS NOT NULL
-        ORDER BY VEC_COSINE_DISTANCE(embeddingVec, ${vecText}) ASC
-        LIMIT ${k}
-      `;
-
-            console.log(`[SIMILARITY_SEARCH] TiDB local search returned ${localRows?.length || 0} rows`);
-
-            const localPrev = (localRows ? ? [])
-                .map((r) => ({...r, similarity: r.similarity ? ? 1 - (r as any).distance }))
-                .filter((r) => r.similarity >= minScore && r.similarity < 0.9999);
-
-            const globalRows = await prisma.$queryRaw < Array < SimilarRecord & { distance ? : number } >> `
-        SELECT
-          id, companyId, uploadId, txId, partner, amount, date,
-          1 - VEC_COSINE_DISTANCE(embeddingVec, ${vecText}) AS similarity
-        FROM Record
-        WHERE companyId <> ${companyId}
-          AND embeddingVec IS NOT NULL
-        ORDER BY VEC_COSINE_DISTANCE(embeddingVec, ${vecText}) ASC
-        LIMIT ${k}
-      `;
-
-            console.log(
-                `[SIMILARITY_SEARCH] TiDB global search returned ${globalRows?.length || 0} rows`
-            );
-
-            const global = (globalRows ? ? [])
-                .map((r) => ({...r, similarity: r.similarity ? ? 1 - (r as any).distance }))
-                .filter((r) => r.similarity >= minScore && r.similarity < 0.9999);
-
-            console.log(
-                `[SIMILARITY_SEARCH] TiDB results - local: ${localPrev.length}, global: ${global.length}`
-            );
-            return { localPrev, global };
-        } catch (err) {
-            console.warn("[SIMILARITY_SEARCH] TiDB vector search failed; falling back:", err);
+    // Set timeout for similarity search (15 seconds)
+    const timeoutPromise = new Promise < { localPrev: SimilarRecord[];global: SimilarRecord[] } > (
+        (resolve) => {
+            setTimeout(() => {
+                console.log("[SIMILARITY_SEARCH] Timeout reached, returning empty results");
+                resolve({ localPrev: [], global: [] });
+            }, 15000);
         }
-    }
-
-    // ---- Fallback: compute cosine over JSON embeddings ----
-    console.log("[SIMILARITY_SEARCH] Using fallback JSON embedding search");
-
-    const localCandidates = await prisma.record.findMany({
-        where: {
-            companyId,
-            ...(uploadId ? { uploadId: { not: uploadId } } : {}),
-            NOT: { embeddingJson: { equals: null } },
-        },
-        select: {
-            id: true,
-            companyId: true,
-            uploadId: true,
-            txId: true,
-            partner: true,
-            amount: true,
-            date: true,
-            embeddingJson: true,
-        },
-        orderBy: { createdAt: "desc" },
-        take: 1000,
-    });
-
-    console.log(
-        `[SIMILARITY_SEARCH] Found ${localCandidates.length} local candidates with embeddings`
     );
 
-    const localPrev = localCandidates
-        .map((r) => {
-            const emb = parseEmbedding(r.embeddingJson);
-            if (!emb) return null;
-            const similarity = cosineSimilarity(embedding, emb);
-            return {
-                id: r.id,
-                companyId: r.companyId,
-                uploadId: r.uploadId,
-                txId: r.txId,
-                partner: r.partner,
-                amount: r.amount,
-                date: r.date,
-                similarity,
+    const searchPromise = (async() => {
+        // ---- Prefer native vector index if available ----
+        if (preferVector) {
+            try {
+                console.log("[SIMILARITY_SEARCH] Attempting TiDB vector search...");
+                const vecText = JSON.stringify(embedding);
+
+                // Use Promise.all for parallel searches
+                const [localRows, globalRows] = await Promise.all([
+                    prisma.$queryRaw < Array < SimilarRecord & { distance ? : number } >> `
+            SELECT
+              id, companyId, uploadId, txId, partner, amount, date,
+              1 - VEC_COSINE_DISTANCE(embeddingVec, ${vecText}) AS similarity
+            FROM Record
+            WHERE companyId = ${companyId}
+              AND (${uploadId} IS NULL OR uploadId <> ${uploadId})
+              AND embeddingVec IS NOT NULL
+            ORDER BY VEC_COSINE_DISTANCE(embeddingVec, ${vecText}) ASC
+            LIMIT ${k}
+          `,
+                    prisma.$queryRaw < Array < SimilarRecord & { distance ? : number } >> `
+            SELECT
+              id, companyId, uploadId, txId, partner, amount, date,
+              1 - VEC_COSINE_DISTANCE(embeddingVec, ${vecText}) AS similarity
+            FROM Record
+            WHERE companyId <> ${companyId}
+              AND embeddingVec IS NOT NULL
+            ORDER BY VEC_COSINE_DISTANCE(embeddingVec, ${vecText}) ASC
+            LIMIT ${k}
+          `,
+                ]);
+
+                console.log(
+                    `[SIMILARITY_SEARCH] TiDB local search returned ${localRows?.length || 0} rows`
+                );
+                console.log(
+                    `[SIMILARITY_SEARCH] TiDB global search returned ${globalRows?.length || 0} rows`
+                );
+
+                const localPrev = (localRows ? ? [])
+                    .map((r) => ({...r, similarity: r.similarity ? ? 1 - (r as any).distance }))
+                    .filter((r) => r.similarity >= minScore && r.similarity < 0.9999);
+
+                const global = (globalRows ? ? [])
+                    .map((r) => ({...r, similarity: r.similarity ? ? 1 - (r as any).distance }))
+                    .filter((r) => r.similarity >= minScore && r.similarity < 0.9999);
+
+                console.log(
+                    `[SIMILARITY_SEARCH] TiDB results - local: ${localPrev.length}, global: ${global.length}`
+                );
+                return { localPrev, global };
+            } catch (err) {
+                console.warn("[SIMILARITY_SEARCH] TiDB vector search failed; falling back:", err);
             }
-            as SimilarRecord;
-        })
-        .filter((x): x is SimilarRecord => !!x && x.similarity >= minScore && x.similarity < 0.9999)
-        .sort((a, b) => b.similarity - a.similarity)
-        .slice(0, k);
+        }
 
-    const globalCandidates = await prisma.record.findMany({
-        where: { companyId: { not: companyId }, NOT: { embeddingJson: { equals: null } } },
-        select: {
-            id: true,
-            companyId: true,
-            uploadId: true,
-            txId: true,
-            partner: true,
-            amount: true,
-            date: true,
-            embeddingJson: true,
-        },
-        orderBy: { createdAt: "desc" },
-        take: 1000,
-    });
+        // ---- Fallback: compute cosine over JSON embeddings ----
+        console.log("[SIMILARITY_SEARCH] Using fallback JSON embedding search");
 
-    console.log(
-        `[SIMILARITY_SEARCH] Found ${globalCandidates.length} global candidates with embeddings`
-    );
+        const [localCandidates, globalCandidates] = await Promise.all([
+            prisma.record.findMany({
+                where: {
+                    companyId,
+                    ...(uploadId ? { uploadId: { not: uploadId } } : {}),
+                    NOT: { embeddingJson: { equals: null } },
+                },
+                select: {
+                    id: true,
+                    companyId: true,
+                    uploadId: true,
+                    txId: true,
+                    partner: true,
+                    amount: true,
+                    date: true,
+                    embeddingJson: true,
+                },
+                orderBy: { createdAt: "desc" },
+                take: 100, // Reduced from 1000 for performance
+            }),
+            prisma.record.findMany({
+                where: {
+                    companyId: { not: companyId },
+                    NOT: { embeddingJson: { equals: null } },
+                },
+                select: {
+                    id: true,
+                    companyId: true,
+                    uploadId: true,
+                    txId: true,
+                    partner: true,
+                    amount: true,
+                    date: true,
+                    embeddingJson: true,
+                },
+                orderBy: { createdAt: "desc" },
+                take: 100, // Reduced from 1000 for performance
+            }),
+        ]);
 
-    const global = globalCandidates
-        .map((r) => {
-            const emb = parseEmbedding(r.embeddingJson);
-            if (!emb) return null;
-            const similarity = cosineSimilarity(embedding, emb);
-            return {
-                id: r.id,
-                companyId: r.companyId,
-                uploadId: r.uploadId,
-                txId: r.txId,
-                partner: r.partner,
-                amount: r.amount,
-                date: r.date,
-                similarity,
-            }
-            as SimilarRecord;
-        })
-        .filter((x): x is SimilarRecord => !!x && x.similarity >= minScore && x.similarity < 0.9999)
-        .sort((a, b) => b.similarity - a.similarity)
-        .slice(0, k);
+        console.log(
+            `[SIMILARITY_SEARCH] Found ${localCandidates.length} local and ${globalCandidates.length} global candidates with embeddings`
+        );
 
-    console.log(
-        `[SIMILARITY_SEARCH] Fallback results - local: ${localPrev.length}, global: ${global.length}`
-    );
-    return { localPrev, global };
+        const localPrev = localCandidates
+            .map((r) => {
+                const emb = parseEmbedding(r.embeddingJson);
+                if (!emb) return null;
+                const similarity = cosineSimilarity(embedding, emb);
+                return {
+                    id: r.id,
+                    companyId: r.companyId,
+                    uploadId: r.uploadId,
+                    txId: r.txId,
+                    partner: r.partner,
+                    amount: r.amount,
+                    date: r.date,
+                    similarity,
+                }
+                as SimilarRecord;
+            })
+            .filter((x): x is SimilarRecord => !!x && x.similarity >= minScore && x.similarity < 0.9999)
+            .sort((a, b) => b.similarity - a.similarity)
+            .slice(0, k);
+
+        const global = globalCandidates
+            .map((r) => {
+                const emb = parseEmbedding(r.embeddingJson);
+                if (!emb) return null;
+                const similarity = cosineSimilarity(embedding, emb);
+                return {
+                    id: r.id,
+                    companyId: r.companyId,
+                    uploadId: r.uploadId,
+                    txId: r.txId,
+                    partner: r.partner,
+                    amount: r.amount,
+                    date: r.date,
+                    similarity,
+                }
+                as SimilarRecord;
+            })
+            .filter((x): x is SimilarRecord => !!x && x.similarity >= minScore && x.similarity < 0.9999)
+            .sort((a, b) => b.similarity - a.similarity)
+            .slice(0, k);
+
+        console.log(
+            `[SIMILARITY_SEARCH] Fallback results - local: ${localPrev.length}, global: ${global.length}`
+        );
+        return { localPrev, global };
+    })();
+
+    // Race between search and timeout
+    return Promise.race([searchPromise, timeoutPromise]);
 }
+
 
 
 
@@ -1394,74 +1505,7 @@ startServer().catch((err) => {
 // =============================================
 // server/src/workers/embeddingWorker.ts
 // =============================================
-import { consume } from "../queue/bus";
-import { prisma } from "../config/db";
-import { getEmbeddingsBatch } from "../services/aiEmbedding";
-import { saveRecordEmbedding } from "../services/vectorStore";
 
-const CONCURRENCY = Number(process.env.WORKER_CONCURRENCY || 6);
-
-function chunk < T > (arr: T[], size: number) {
-    const out: T[][] = [];
-    for (let i = 0; i < arr.length; i += size) out.push(arr.slice(i, i + size));
-    return out;
-}
-
-export async function startEmbeddingWorker() {
-    await consume("embeddings.generate", async(payload) => {
-        const { recordIds } = payload as { recordIds: string[] };
-
-        // Grab only what we need to build the embedding text
-        const recs = await prisma.record.findMany({
-            where: { id: { in: recordIds } },
-            select: {
-                id: true,
-                normalizedPartner: true,
-                amount: true,
-                normalizedCurrency: true,
-                userKey: true,
-            },
-        });
-
-        const texts = recs.map((r) => {
-            return `${r.normalizedPartner ?? ""} | ${r.amount ?? ""} ${r.normalizedCurrency ?? ""} | ${
-        r.userKey ?? ""
-      }`;
-        });
-
-        // Batch call embedding API
-        const embeddings = await getEmbeddingsBatch(texts);
-
-        // Persist (limited parallelism)
-        const tasks = embeddings.map((emb, i) => async() => {
-            await saveRecordEmbedding(recs[i].id, emb);
-        });
-
-        const groups = chunk(tasks, CONCURRENCY);
-        for (const g of groups) {
-            await Promise.all(g.map((fn) => fn()));
-        }
-    });
-}
-
-
-// =============================================
-// server/src/workers/explainWorker.ts
-// =============================================
-import { consume } from "../queue/bus";
-import { prisma } from "../config/db";
-import { generateThreatExplanation, type ThreatContext } from "../services/aiExplanation";
-
-export async function startExplainWorker() {
-    await consume("threat.explain", async(payload) => {
-        const { threatId, context } = payload as { threatId: string;context: ThreatContext };
-        const full = await generateThreatExplanation(context);
-        await prisma.threat.update({
-            where: { id: threatId },
-            data: { description: full },
-        });
-    });
-}
 
 
 

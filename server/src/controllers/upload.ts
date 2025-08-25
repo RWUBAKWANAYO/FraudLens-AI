@@ -1,34 +1,41 @@
+// server/src/controllers/upload.ts
 import { Request, Response, NextFunction } from "express";
 import { prisma } from "../config/db";
 import { parseBuffer } from "../services/fileParser";
 import { detectLeaks } from "../services/leakDetection";
 import crypto from "crypto";
 import { publish } from "../queue/bus";
-import { getEmbedding } from "../services/aiEmbedding";
+import { getEmbeddingsBatch } from "../services/aiEmbedding";
 
 function sha256(buf: Buffer | string) {
   return crypto.createHash("sha256").update(buf).digest("hex");
 }
+
 function normalizeCurrency(cur?: string | null) {
   return (cur || "USD").toUpperCase().trim();
 }
+
 function normalizePartner(p?: string | null) {
   return (p || "").trim().replace(/\s+/g, " ").toLowerCase();
 }
+
 function maskAccount(a?: string | null) {
   if (!a) return null;
   const s = String(a).replace(/\s+/g, "");
   return `****${s.slice(-4)}`;
 }
+
 function timeBucket(ts: Date | null | undefined, seconds: number) {
   const ms = ts ? ts.getTime() : Date.now();
   return Math.floor(ms / (seconds * 1000));
 }
+
 function safeDate(d?: string | Date | null) {
   if (!d) return null;
   const dt = typeof d === "string" ? new Date(d) : d;
   return isNaN(dt.getTime()) ? null : dt;
 }
+
 function mkCanonicalKey(args: {
   userKey: string | null;
   normalizedPartner: string | null;
@@ -45,6 +52,7 @@ function mkCanonicalKey(args: {
   ].join("|");
   return sha256(s);
 }
+
 function mkRecordSignature(args: {
   txId?: string | null;
   amount?: number | null;
@@ -63,8 +71,9 @@ function mkRecordSignature(args: {
   return sha256(s);
 }
 
-const CREATE_MANY_CHUNK = Number(process.env.CREATE_MANY_CHUNK || 1000);
+const CREATE_MANY_CHUNK = Number(process.env.CREATE_MANY_CHUNK || 2000);
 const EMBEDDINGS_ASYNC = process.env.EMBEDDINGS_ASYNC !== "false";
+const EMBED_BATCH = Number(process.env.EMBED_BATCH || 50);
 
 export async function handleFileUpload(req: Request, res: Response, next: NextFunction) {
   try {
@@ -75,7 +84,6 @@ export async function handleFileUpload(req: Request, res: Response, next: NextFu
 
     const buffer = req.file.buffer;
     const fileName = req.file.originalname;
-    const fileType = req.file.mimetype;
 
     const ext = fileName.split(".").pop()?.toLowerCase();
     if (!ext || !["csv", "xlsx", "xls", "pdf", "txt"].includes(ext)) {
@@ -89,6 +97,7 @@ export async function handleFileUpload(req: Request, res: Response, next: NextFu
       where: { companyId, fileHash, createdAt: { gte: dedupeSince } },
       select: { id: true },
     });
+
     if (prev) {
       const prevThreats = await prisma.threat.findMany({ where: { uploadId: prev.id } });
       const recs = await prisma.record.findMany({ where: { uploadId: prev.id } });
@@ -114,13 +123,17 @@ export async function handleFileUpload(req: Request, res: Response, next: NextFu
 
     // --- Create upload row ---
     const upload = await prisma.upload.create({
-      data: { companyId, fileName, fileType, source: "batch", fileHash },
+      data: { companyId, fileName, fileType: req.file.mimetype, source: "batch", fileHash },
     });
 
-    // --- Parse rows ---
+    // --- Parse rows with progress tracking ---
+    console.time("File parsing");
     const parsed = await parseBuffer(buffer, fileName);
+    console.timeEnd("File parsing");
+    console.log(`Parsed ${parsed.length} records`);
 
-    // --- Prepare rows for bulk insert (no per-row awaits) ---
+    // --- Prepare rows for bulk insert ---
+    console.time("Record preparation");
     const toInsert = parsed.map((r) => {
       const normalizedCurrency = normalizeCurrency((r as any).currency);
       const normalizedPartner = normalizePartner(r.partner);
@@ -133,7 +146,6 @@ export async function handleFileUpload(req: Request, res: Response, next: NextFu
         (r as any).bank_account ||
         (r as any).account_number ||
         null;
-
       const accountKey = accountRaw ? String(accountRaw) : null;
       const accountMasked = maskAccount(accountRaw);
       const bucket30 = timeBucket(txnDate, 30);
@@ -165,14 +177,12 @@ export async function handleFileUpload(req: Request, res: Response, next: NextFu
         currency: (r as any).currency ?? null,
         date: txnDate,
         raw: r.raw ?? {},
-        // "enrichment" from provided fields (avoid async on hot path)
         ip: r.ip || null,
         device: r.device || null,
         geoCountry: (r as any).geoCountry || null,
         geoCity: (r as any).geoCity || null,
         mcc: (r as any).mcc || null,
         channel: (r as any).channel || null,
-        // derived
         normalizedPartner,
         normalizedCurrency,
         userKey,
@@ -184,95 +194,146 @@ export async function handleFileUpload(req: Request, res: Response, next: NextFu
         recordSignature,
       };
     });
+    console.timeEnd("Record preparation");
 
-    // --- Bulk insert in chunks inside a single transaction ---
-    await prisma.$transaction(async (tx) => {
-      for (let i = 0; i < toInsert.length; i += CREATE_MANY_CHUNK) {
-        const chunk = toInsert.slice(i, i + CREATE_MANY_CHUNK);
-        await tx.record.createMany({ data: chunk });
+    // --- FIXED: Bulk insert in chunks WITHOUT transaction ---
+    console.time("Database insert");
+    for (let i = 0; i < toInsert.length; i += CREATE_MANY_CHUNK) {
+      const chunk = toInsert.slice(i, i + CREATE_MANY_CHUNK);
+      await prisma.record.createMany({ data: chunk });
+      console.log(
+        `Inserted chunk ${i / CREATE_MANY_CHUNK + 1}/${Math.ceil(
+          toInsert.length / CREATE_MANY_CHUNK
+        )}`
+      );
+
+      // Add a small delay to prevent overwhelming the database
+      if (i % 5000 === 0) {
+        await new Promise((resolve) => setTimeout(resolve, 100));
       }
-    });
+    }
+    console.timeEnd("Database insert");
 
-    // --- Pull inserted rows (id + fields) for analysis & embedding job ---
-    const inserted = await prisma.record.findMany({
-      where: { uploadId: upload.id },
-      orderBy: { createdAt: "asc" },
-    });
-
-    // --- Kick embeddings to background (fast path), or do nothing if disabled ---
-    if (EMBEDDINGS_ASYNC) {
+    // --- For large files, always use async embedding generation ---
+    if (parsed.length > 100 || EMBEDDINGS_ASYNC) {
+      console.log(`Queuing ${parsed.length} records for async embedding generation`);
       await publish("embeddings.generate", {
         companyId,
         uploadId: upload.id,
-        recordIds: inserted.map((r) => r.id),
+        recordIds: toInsert.map((r) => r.id),
+        originalFileName: fileName, // Add this for progress tracking
+      });
+
+      // Return immediately for async processing
+      return res.json({
+        uploadId: upload.id,
+        recordsAnalyzed: parsed.length,
+        threats: [],
+        summary: {
+          totalRecords: parsed.length,
+          flagged: 0,
+          flaggedValue: 0,
+          message: `File uploaded successfully. ${parsed.length} records queued for processing. Threats will be detected asynchronously.`,
+        },
+        processingAsync: true,
       });
     } else {
-      // 🔥 NEW: Synchronous embedding generation
-      console.log("Generating embeddings synchronously...");
+      // --- Small files: synchronous processing ---
+      const inserted = await prisma.record.findMany({
+        where: { uploadId: upload.id },
+        orderBy: { createdAt: "asc" },
+      });
+
+      console.time("Embedding generation");
       await generateEmbeddingsForRecords(inserted);
+      console.timeEnd("Embedding generation");
+
+      const recordsWithEmbeddings = await prisma.record.findMany({
+        where: { uploadId: upload.id },
+        orderBy: { createdAt: "asc" },
+      });
+
+      console.time("Leak detection");
+      const { threatsCreated, summary } = await detectLeaks(
+        recordsWithEmbeddings,
+        upload.id,
+        companyId
+      );
+      console.timeEnd("Leak detection");
+
+      return res.json({
+        uploadId: upload.id,
+        recordsAnalyzed: inserted.length,
+        threats: threatsCreated,
+        summary,
+        embeddingsQueued: EMBEDDINGS_ASYNC,
+        processingMode: EMBEDDINGS_ASYNC ? "async" : "sync",
+        message: EMBEDDINGS_ASYNC
+          ? "File uploaded successfully. Records queued for async processing. Threats will be detected shortly."
+          : "File processed synchronously. All threats detected.",
+      });
     }
-
-    async function generateEmbeddingsForRecords(records: any[]) {
-      console.log(`Starting embedding generation for ${records.length} records`);
-
-      for (const record of records) {
-        try {
-          // Create text for embedding
-          const text = [
-            record.partner,
-            record.amount,
-            record.currency,
-            record.txId,
-            record.normalizedPartner,
-            record.normalizedCurrency,
-          ]
-            .filter(Boolean)
-            .join(" ");
-
-          if (text.trim()) {
-            const embedding = await getEmbedding(text);
-            const embeddingJson = JSON.stringify(embedding);
-
-            // Update using raw SQL to handle both columns
-            await prisma.$executeRaw`
-          UPDATE Record 
-          SET embeddingJson = ${embeddingJson}, 
-              embeddingVec = ${embeddingJson}
-          WHERE id = ${record.id}
-        `;
-
-            console.log(`Generated embedding for record ${record.id}`);
-          } else {
-            console.log(`Skipping embedding for record ${record.id} - no text content`);
-          }
-        } catch (error) {
-          console.error(`Failed to generate embedding for record ${record.id}:`, error);
-        }
-      }
-
-      console.log(`Completed embedding generation`);
-    }
-
-    const recordsWithEmbeddings = await prisma.record.findMany({
-      where: { uploadId: upload.id },
-      orderBy: { createdAt: "asc" },
-    });
-
-    // --- Run detection synchronously (keeps your existing API contract fast) ---
-    const { threatsCreated, summary } = await detectLeaks(
-      recordsWithEmbeddings,
-      upload.id,
-      companyId
-    );
-
-    return res.json({
-      uploadId: upload.id,
-      recordsAnalyzed: inserted.length,
-      threats: threatsCreated,
-      summary,
-      embeddingsQueued: EMBEDDINGS_ASYNC,
-    });
   } catch (err) {
     next(err);
+  }
+}
+
+// Optimized embedding generation with batching
+async function generateEmbeddingsForRecords(records: any[]) {
+  console.log(`Generating embeddings for ${records.length} records`);
+
+  const batches = [];
+  for (let i = 0; i < records.length; i += EMBED_BATCH) {
+    batches.push(records.slice(i, i + EMBED_BATCH));
+  }
+
+  for (const [batchIndex, batch] of batches.entries()) {
+    console.log(`Processing embedding batch ${batchIndex + 1}/${batches.length}`);
+
+    const texts = batch
+      .map((record) => {
+        return [
+          record.partner,
+          record.amount,
+          record.currency,
+          record.txId,
+          record.normalizedPartner,
+          record.normalizedCurrency,
+        ]
+          .filter(Boolean)
+          .join(" ");
+      })
+      .filter((text) => text.trim());
+
+    if (texts.length === 0) {
+      console.log(`Skipping batch ${batchIndex + 1} - no text content`);
+      continue;
+    }
+
+    try {
+      const embeddings = await getEmbeddingsBatch(texts);
+
+      // Update records in parallel
+      const updatePromises = batch.map((record, index) => {
+        if (index < embeddings.length) {
+          const embedding = embeddings[index];
+          const embeddingJson = JSON.stringify(embedding);
+
+          return prisma.$executeRaw`
+                        UPDATE Record 
+                        SET embeddingJson = ${embeddingJson}, 
+                            embeddingVec = ${embeddingJson}
+                        WHERE id = ${record.id}
+                    `;
+        }
+        return Promise.resolve();
+      });
+
+      await Promise.all(updatePromises);
+      console.log(`Completed batch ${batchIndex + 1}/${batches.length}`);
+    } catch (error) {
+      console.error(`Failed to process batch ${batchIndex + 1}:`, error);
+      // Continue with other batches
+    }
   }
 }

@@ -70,8 +70,9 @@ async function main() {
     create: {
       id: "test-webhook-1",
       companyId: company1.id,
-      url: "https://webhook.site/#!/test-webhook-1",
+      url: "https://webhook.site/83d13f0d-0801-4b0c-875d-39730098eb44", // Fixed URL
       secret: "test-secret-123",
+      events: ["threat.created", "alert.created"], // Add events array
       active: true,
     },
   });

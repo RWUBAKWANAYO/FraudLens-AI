@@ -65,8 +65,9 @@ function mkRecordSignature(args) {
     ].join("|");
     return sha256(s);
 }
-const CREATE_MANY_CHUNK = Number(process.env.CREATE_MANY_CHUNK || 1000);
+const CREATE_MANY_CHUNK = Number(process.env.CREATE_MANY_CHUNK || 2000);
 const EMBEDDINGS_ASYNC = process.env.EMBEDDINGS_ASYNC !== "false";
+const EMBED_BATCH = Number(process.env.EMBED_BATCH || 50);
 function handleFileUpload(req, res, next) {
     return __awaiter(this, void 0, void 0, function* () {
         var _a;
@@ -78,7 +79,6 @@ function handleFileUpload(req, res, next) {
                 return res.status(400).json({ error: "Missing companyId" });
             const buffer = req.file.buffer;
             const fileName = req.file.originalname;
-            const fileType = req.file.mimetype;
             const ext = (_a = fileName.split(".").pop()) === null || _a === void 0 ? void 0 : _a.toLowerCase();
             if (!ext || !["csv", "xlsx", "xls", "pdf", "txt"].includes(ext)) {
                 return res.status(400).json({ error: "Unsupported file format. Upload CSV/Excel/PDF only." });
@@ -115,11 +115,15 @@ function handleFileUpload(req, res, next) {
             }
             // --- Create upload row ---
             const upload = yield db_1.prisma.upload.create({
-                data: { companyId, fileName, fileType, source: "batch", fileHash },
+                data: { companyId, fileName, fileType: req.file.mimetype, source: "batch", fileHash },
             });
-            // --- Parse rows ---
+            // --- Parse rows with progress tracking ---
+            console.time("File parsing");
             const parsed = yield (0, fileParser_1.parseBuffer)(buffer, fileName);
-            // --- Prepare rows for bulk insert (no per-row awaits) ---
+            console.timeEnd("File parsing");
+            console.log(`Parsed ${parsed.length} records`);
+            // --- Prepare rows for bulk insert ---
+            console.time("Record preparation");
             const toInsert = parsed.map((r) => {
                 var _a, _b, _c, _d, _e, _f, _g, _h;
                 const normalizedCurrency = normalizeCurrency(r.currency);
@@ -159,14 +163,12 @@ function handleFileUpload(req, res, next) {
                     currency: (_g = r.currency) !== null && _g !== void 0 ? _g : null,
                     date: txnDate,
                     raw: (_h = r.raw) !== null && _h !== void 0 ? _h : {},
-                    // "enrichment" from provided fields (avoid async on hot path)
                     ip: r.ip || null,
                     device: r.device || null,
                     geoCountry: r.geoCountry || null,
                     geoCity: r.geoCity || null,
                     mcc: r.mcc || null,
                     channel: r.channel || null,
-                    // derived
                     normalizedPartner,
                     normalizedCurrency,
                     userKey,
@@ -178,86 +180,127 @@ function handleFileUpload(req, res, next) {
                     recordSignature,
                 };
             });
-            // --- Bulk insert in chunks inside a single transaction ---
-            yield db_1.prisma.$transaction((tx) => __awaiter(this, void 0, void 0, function* () {
-                for (let i = 0; i < toInsert.length; i += CREATE_MANY_CHUNK) {
-                    const chunk = toInsert.slice(i, i + CREATE_MANY_CHUNK);
-                    yield tx.record.createMany({ data: chunk });
+            console.timeEnd("Record preparation");
+            // --- FIXED: Bulk insert in chunks WITHOUT transaction ---
+            console.time("Database insert");
+            for (let i = 0; i < toInsert.length; i += CREATE_MANY_CHUNK) {
+                const chunk = toInsert.slice(i, i + CREATE_MANY_CHUNK);
+                yield db_1.prisma.record.createMany({ data: chunk });
+                console.log(`Inserted chunk ${i / CREATE_MANY_CHUNK + 1}/${Math.ceil(toInsert.length / CREATE_MANY_CHUNK)}`);
+                // Add a small delay to prevent overwhelming the database
+                if (i % 5000 === 0) {
+                    yield new Promise((resolve) => setTimeout(resolve, 100));
                 }
-            }));
-            // --- Pull inserted rows (id + fields) for analysis & embedding job ---
-            const inserted = yield db_1.prisma.record.findMany({
-                where: { uploadId: upload.id },
-                orderBy: { createdAt: "asc" },
-            });
-            // --- Kick embeddings to background (fast path), or do nothing if disabled ---
-            if (EMBEDDINGS_ASYNC) {
+            }
+            console.timeEnd("Database insert");
+            // --- For large files, always use async embedding generation ---
+            if (parsed.length > 100 || EMBEDDINGS_ASYNC) {
+                console.log(`Queuing ${parsed.length} records for async embedding generation`);
                 yield (0, bus_1.publish)("embeddings.generate", {
                     companyId,
                     uploadId: upload.id,
-                    recordIds: inserted.map((r) => r.id),
+                    recordIds: toInsert.map((r) => r.id),
+                    originalFileName: fileName, // Add this for progress tracking
+                });
+                // Return immediately for async processing
+                return res.json({
+                    uploadId: upload.id,
+                    recordsAnalyzed: parsed.length,
+                    threats: [],
+                    summary: {
+                        totalRecords: parsed.length,
+                        flagged: 0,
+                        flaggedValue: 0,
+                        message: `File uploaded successfully. ${parsed.length} records queued for processing. Threats will be detected asynchronously.`,
+                    },
+                    processingAsync: true,
                 });
             }
             else {
-                // 🔥 NEW: Synchronous embedding generation
-                console.log("Generating embeddings synchronously...");
+                // --- Small files: synchronous processing ---
+                const inserted = yield db_1.prisma.record.findMany({
+                    where: { uploadId: upload.id },
+                    orderBy: { createdAt: "asc" },
+                });
+                console.time("Embedding generation");
                 yield generateEmbeddingsForRecords(inserted);
-            }
-            function generateEmbeddingsForRecords(records) {
-                return __awaiter(this, void 0, void 0, function* () {
-                    console.log(`Starting embedding generation for ${records.length} records`);
-                    for (const record of records) {
-                        try {
-                            // Create text for embedding
-                            const text = [
-                                record.partner,
-                                record.amount,
-                                record.currency,
-                                record.txId,
-                                record.normalizedPartner,
-                                record.normalizedCurrency,
-                            ]
-                                .filter(Boolean)
-                                .join(" ");
-                            if (text.trim()) {
-                                const embedding = yield (0, aiEmbedding_1.getEmbedding)(text);
-                                const embeddingJson = JSON.stringify(embedding);
-                                // Update using raw SQL to handle both columns
-                                yield db_1.prisma.$executeRaw `
-          UPDATE Record 
-          SET embeddingJson = ${embeddingJson}, 
-              embeddingVec = ${embeddingJson}
-          WHERE id = ${record.id}
-        `;
-                                console.log(`Generated embedding for record ${record.id}`);
-                            }
-                            else {
-                                console.log(`Skipping embedding for record ${record.id} - no text content`);
-                            }
-                        }
-                        catch (error) {
-                            console.error(`Failed to generate embedding for record ${record.id}:`, error);
-                        }
-                    }
-                    console.log(`Completed embedding generation`);
+                console.timeEnd("Embedding generation");
+                const recordsWithEmbeddings = yield db_1.prisma.record.findMany({
+                    where: { uploadId: upload.id },
+                    orderBy: { createdAt: "asc" },
+                });
+                console.time("Leak detection");
+                const { threatsCreated, summary } = yield (0, leakDetection_1.detectLeaks)(recordsWithEmbeddings, upload.id, companyId);
+                console.timeEnd("Leak detection");
+                return res.json({
+                    uploadId: upload.id,
+                    recordsAnalyzed: inserted.length,
+                    threats: threatsCreated,
+                    summary,
+                    embeddingsQueued: EMBEDDINGS_ASYNC,
+                    processingMode: EMBEDDINGS_ASYNC ? "async" : "sync",
+                    message: EMBEDDINGS_ASYNC
+                        ? "File uploaded successfully. Records queued for async processing. Threats will be detected shortly."
+                        : "File processed synchronously. All threats detected.",
                 });
             }
-            const recordsWithEmbeddings = yield db_1.prisma.record.findMany({
-                where: { uploadId: upload.id },
-                orderBy: { createdAt: "asc" },
-            });
-            // --- Run detection synchronously (keeps your existing API contract fast) ---
-            const { threatsCreated, summary } = yield (0, leakDetection_1.detectLeaks)(recordsWithEmbeddings, upload.id, companyId);
-            return res.json({
-                uploadId: upload.id,
-                recordsAnalyzed: inserted.length,
-                threats: threatsCreated,
-                summary,
-                embeddingsQueued: EMBEDDINGS_ASYNC,
-            });
         }
         catch (err) {
             next(err);
+        }
+    });
+}
+// Optimized embedding generation with batching
+function generateEmbeddingsForRecords(records) {
+    return __awaiter(this, void 0, void 0, function* () {
+        console.log(`Generating embeddings for ${records.length} records`);
+        const batches = [];
+        for (let i = 0; i < records.length; i += EMBED_BATCH) {
+            batches.push(records.slice(i, i + EMBED_BATCH));
+        }
+        for (const [batchIndex, batch] of batches.entries()) {
+            console.log(`Processing embedding batch ${batchIndex + 1}/${batches.length}`);
+            const texts = batch
+                .map((record) => {
+                return [
+                    record.partner,
+                    record.amount,
+                    record.currency,
+                    record.txId,
+                    record.normalizedPartner,
+                    record.normalizedCurrency,
+                ]
+                    .filter(Boolean)
+                    .join(" ");
+            })
+                .filter((text) => text.trim());
+            if (texts.length === 0) {
+                console.log(`Skipping batch ${batchIndex + 1} - no text content`);
+                continue;
+            }
+            try {
+                const embeddings = yield (0, aiEmbedding_1.getEmbeddingsBatch)(texts);
+                // Update records in parallel
+                const updatePromises = batch.map((record, index) => {
+                    if (index < embeddings.length) {
+                        const embedding = embeddings[index];
+                        const embeddingJson = JSON.stringify(embedding);
+                        return db_1.prisma.$executeRaw `
+                        UPDATE Record 
+                        SET embeddingJson = ${embeddingJson}, 
+                            embeddingVec = ${embeddingJson}
+                        WHERE id = ${record.id}
+                    `;
+                    }
+                    return Promise.resolve();
+                });
+                yield Promise.all(updatePromises);
+                console.log(`Completed batch ${batchIndex + 1}/${batches.length}`);
+            }
+            catch (error) {
+                console.error(`Failed to process batch ${batchIndex + 1}:`, error);
+                // Continue with other batches
+            }
         }
     });
 }

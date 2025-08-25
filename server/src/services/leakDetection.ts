@@ -1,11 +1,22 @@
-// server/src/services/detectLeaks.ts
+// server/src/services/leakDetection.ts
 import { prisma } from "../config/db";
-import type { Record as PrismaRecord, Prisma } from "@prisma/client";
-import { generateThreatExplanation, type ThreatContext } from "./aiExplanation";
+import { Record as PrismaRecord, Prisma } from "@prisma/client";
+import { generateStaticExplanation, type ThreatContext } from "./leakExplanation";
 import { findSimilarForEmbedding } from "./similaritySearch";
-import { createAndDispatchAlert } from "./alerts";
-import { dispatchEnterpriseWebhooks } from "./webhooks";
-import { publish } from "../queue/bus";
+import { queueWebhook } from "../queue/webhookQueue";
+import { webhookService } from "./webhooks";
+import { redisPublisher } from "./redisPublisher";
+
+// Create a proper type for the emit function
+type EmitFunction = (
+  ruleId: string,
+  recordsToFlag: PrismaRecord[],
+  context: ThreatContext,
+  confidence: number,
+  severity: keyof typeof SEVERITY,
+  clusterKey: string,
+  meta?: { fullCount?: number; fullRecordIds?: string[]; fullAmountSum?: number }
+) => Promise<void>;
 
 // --- Severities & Rule IDs ---
 const SEVERITY = { HIGH: "high", MEDIUM: "medium", LOW: "low" } as const;
@@ -23,6 +34,10 @@ const TS_TOLERANCE_SEC = Number(process.env.DUP_TS_TOLERANCE_SEC ?? 30);
 const AMOUNT_TOLERANCE_CENTS = Number(process.env.DUP_AMOUNT_TOLERANCE_CENTS ?? 0);
 const SIMILARITY_DUP_THRESHOLD = Number(process.env.SIM_DUP_THRESHOLD ?? 0.85);
 const SIMILARITY_SUSPICIOUS_THRESHOLD = Number(process.env.SIM_SUS_THRESHOLD ?? 0.75);
+
+// --- Performance settings ---
+const SIMILARITY_SEARCH_LIMIT = Number(process.env.SIMILARITY_SEARCH_LIMIT || 50);
+const SIMILARITY_BATCH_SIZE = Number(process.env.SIMILARITY_BATCH_SIZE || 10);
 
 // --- CreatedThreat shape ---
 type CreatedThreat = {
@@ -61,6 +76,7 @@ function cents(amt?: number | null): number | null {
   if (amt == null) return null;
   return Math.round(amt * 100);
 }
+
 function amountEq(
   a?: number | null,
   b?: number | null,
@@ -71,12 +87,15 @@ function amountEq(
   if (ca == null || cb == null) return ca === cb;
   return Math.abs(ca - cb) <= tolCents;
 }
+
 function normCur(cur?: string | null): string {
   return (cur || "USD").toUpperCase().trim();
 }
+
 function strEq(a?: string | null, b?: string | null): boolean {
   return (a || "") === (b || "");
 }
+
 function datesClose(a?: Date | null, b?: Date | null, tolSec = TS_TOLERANCE_SEC): boolean {
   if (!a || !b) return true;
   const diff = Math.abs(a.getTime() - b.getTime());
@@ -96,10 +115,21 @@ function isStrictDuplicate(a: PrismaRecord, b: PrismaRecord): boolean {
   );
 }
 
-export async function detectLeaks(records: PrismaRecord[], uploadId: string, companyId: string) {
+type ProgressCallback = (progress: number, total: number, threats: number) => Promise<void>;
+
+export async function detectLeaks(
+  records: PrismaRecord[],
+  uploadId: string,
+  companyId: string,
+  onProgress?: ProgressCallback
+) {
+  console.time("Total leak detection time");
   console.log(
     `[DETECT_LEAKS] Starting for upload ${uploadId}, company ${companyId}, ${records.length} records`
   );
+  console.log("======== LEAK DETECTION STARTED =======");
+  console.log("Records:", records.length);
+  console.log("Progress callback:", !!onProgress);
 
   const threatsCreated: CreatedThreat[] = [];
   const flaggedByRule: Map<string, Set<string>> = new Map();
@@ -116,26 +146,31 @@ export async function detectLeaks(records: PrismaRecord[], uploadId: string, com
   const max = positive.length ? Math.max(...positive) : 0;
   const baseStats = { mean, max, totalRecords: total };
 
-  // Index current upload for batch-level passes
-  const byTxId = new Map<string, PrismaRecord[]>();
-  const byCanonical = new Map<string, PrismaRecord[]>();
-  for (const r of records) {
-    if (r.txId) {
-      const arr = byTxId.get(r.txId) || [];
-      arr.push(r);
-      byTxId.set(r.txId, arr);
+  // SIMPLIFIED PROGRESS TRACKING - 4 main stages
+  const TOTAL_STAGES = 4;
+  let currentStage = 0;
+  let stageProgress = 0;
+
+  async function updateStageProgress(increment: number, stage: number) {
+    console.log(
+      `================ Progress: Stage ${stage}, Progress ${stageProgress}, currentStage ${currentStage}========================`
+    );
+    if (stage !== currentStage) {
+      currentStage = stage;
+      stageProgress = 0;
     }
-    if (r.canonicalKey) {
-      const arr = byCanonical.get(r.canonicalKey) || [];
-      arr.push(r);
-      byCanonical.set(r.canonicalKey, arr);
+
+    stageProgress += increment;
+
+    if (onProgress) {
+      // Calculate overall progress: 50% base + 45% for detection stages
+      const stageWeight = 45 / TOTAL_STAGES; // 45% divided among stages
+      const overallProgress = 50 + currentStage * stageWeight + stageProgress * stageWeight;
+
+      await onProgress(Math.min(95, Math.round(overallProgress)), total, threatsCreated.length);
     }
   }
 
-  /**
-   * Emit helper that bookkeeps ONLY the provided recordsToFlag (duplicates),
-   * while the context can still describe the whole cluster.
-   */
   async function emit(
     ruleId: string,
     recordsToFlag: PrismaRecord[],
@@ -200,16 +235,70 @@ export async function detectLeaks(records: PrismaRecord[], uploadId: string, com
     byRuleClusters.set(ruleId, agg);
 
     const summaryTxt = t.description || "";
-    await createAndDispatchAlert({
-      companyId,
-      recordId: anchor.id,
-      threatId: (t as any).id,
-      title: ruleId.replace(/_/g, " "),
-      summary: summaryTxt,
-      severity: SEVERITY[severity],
-      payload: { ruleId, clusterKey, context: t },
+
+    // Create alert in database
+    const alert = await prisma.alert.create({
+      data: {
+        companyId,
+        recordId: anchor.id,
+        threatId: (t as any).id,
+        title: ruleId.replace(/_/g, " "),
+        summary: summaryTxt,
+        severity: SEVERITY[severity],
+        payload: { ruleId, clusterKey, context: t },
+      },
     });
-    await dispatchEnterpriseWebhooks(companyId, { type: "threat.created", data: t });
+
+    console.log("ALERT CREATED:", alert.id, "for company:", companyId);
+
+    // Use Redis for real-time updates instead of direct socket
+    await redisPublisher.publishAlert(companyId, {
+      type: "alert_created",
+      alertId: alert.id,
+      threatId: (t as any).id,
+      recordId: anchor.id,
+      title: alert.title,
+      severity: alert.severity,
+      summary: alert.summary,
+      timestamp: new Date().toISOString(),
+      uploadId,
+    });
+
+    // Webhook dispatch (with better error handling)
+    try {
+      const webhooks = await webhookService.getMockWebhooks(companyId);
+
+      for (const webhook of webhooks) {
+        await queueWebhook(webhook.id, companyId, "threat.created", {
+          threat: {
+            id: (t as any).id,
+            type: t.threatType,
+            confidence: t.confidenceScore,
+            description: t.description,
+            ruleId,
+            severity: SEVERITY[severity],
+          },
+          record: {
+            id: anchor.id,
+            txId: anchor.txId,
+            amount: anchor.amount,
+            currency: anchor.currency,
+            partner: anchor.partner,
+          },
+          cluster: {
+            key: clusterKey,
+            totalRecords: meta?.fullCount,
+            totalAmount: meta?.fullAmountSum,
+          },
+          context: {
+            uploadId,
+            detectedAt: new Date().toISOString(),
+          },
+        });
+      }
+    } catch (webhookError) {
+      console.error("Webhook queueing failed:", webhookError);
+    }
   }
 
   // ------------------ DEBUG: Check embeddings first ------------------
@@ -229,104 +318,180 @@ export async function detectLeaks(records: PrismaRecord[], uploadId: string, com
     where: {
       companyId,
       uploadId: { not: uploadId },
-      embeddingJson: { not: null },
+      embeddingJson: { not: Prisma.JsonNull },
     },
   });
   console.log(`[SIMILARITY] Previous records with embeddings: ${previousRecordCount}`);
 
-  // ---------------- Stage A: Historical (DB) strict duplicates ----------------
-  console.log("[DUPLICATES] Starting historical duplicate detection...");
-  // A1. Same TXID + same attributes (strict) in PRIOR uploads of the SAME company
-  for (const rec of records) {
-    if (!rec.txId || alreadyFlaggedRecordIds.has(rec.id)) continue;
+  // --- Bulk fetch existing TXIDs and Canonical Keys for duplicate detection ---
+  console.time("Bulk duplicate check preparation");
+  const existingTxIds = new Set<string>();
+  const existingCanonicalKeys = new Set<string>();
 
-    const prev = await prisma.record.findMany({
+  // Fetch existing records in bulk
+  const txIds = records.map((r) => r.txId).filter(Boolean) as string[];
+  const canonicalKeys = records.map((r) => r.canonicalKey).filter(Boolean) as string[];
+
+  if (txIds.length > 0) {
+    const existingTxRecords = await prisma.record.findMany({
       where: {
         companyId,
-        txId: rec.txId,
+        txId: { in: txIds },
         uploadId: { not: uploadId },
       },
-      select: {
-        id: true,
-        txId: true,
-        partner: true,
-        normalizedPartner: true,
-        amount: true,
-        currency: true,
-        normalizedCurrency: true,
-        date: true,
-        createdAt: true,
-      },
-      orderBy: { createdAt: "desc" },
-      take: 50,
+      select: { txId: true, id: true },
+      take: 1000,
     });
-
-    const matches = prev.filter((p) => isStrictDuplicate(rec, p));
-    if (matches.length > 0) {
-      await emit(
-        RULE.DUP_IN_DB__TXID,
-        [rec],
-        {
-          threatType: RULE.DUP_IN_DB__TXID,
-          amount: rec.amount ?? null,
-          partner: rec.partner ?? null,
-          txId: rec.txId ?? null,
-          datasetStats: baseStats,
-          additionalContext: {
-            scope: "db_prior_same_txid",
-            priorCount: matches.length,
-            priorIds: matches.slice(0, 5).map((m) => m.id),
-          },
-        },
-        0.98,
-        "HIGH",
-        `dbtx:${rec.txId}:${rec.id}`
-      );
-    }
+    existingTxRecords.forEach((r) => existingTxIds.add(r.txId as string));
   }
 
-  // A2. Same Canonical Key (strict tuple) in PRIOR uploads of the SAME company
-  for (const rec of records) {
-    if (!rec.canonicalKey || alreadyFlaggedRecordIds.has(rec.id)) continue;
-
-    const prev = await prisma.record.findMany({
+  if (canonicalKeys.length > 0) {
+    const existingCanonicalRecords = await prisma.record.findMany({
       where: {
         companyId,
-        canonicalKey: rec.canonicalKey,
+        canonicalKey: { in: canonicalKeys },
         uploadId: { not: uploadId },
       },
-      select: { id: true },
-      orderBy: { createdAt: "desc" },
-      take: 50,
+      select: { canonicalKey: true, id: true },
+      take: 1000,
     });
+    existingCanonicalRecords.forEach((r) => existingCanonicalKeys.add(r.canonicalKey as string));
+  }
+  console.timeEnd("Bulk duplicate check preparation");
 
-    if (prev.length > 0) {
-      await emit(
-        RULE.DUP_IN_DB__CANONICAL,
-        [rec],
-        {
-          threatType: RULE.DUP_IN_DB__CANONICAL,
-          amount: rec.amount ?? null,
-          partner: rec.partner ?? null,
-          txId: rec.txId ?? null,
-          datasetStats: baseStats,
-          additionalContext: {
-            scope: "db_prior_same_canonical",
-            canonicalKey: rec.canonicalKey,
-            priorCount: prev.length,
-            priorIds: prev.slice(0, 5).map((m) => m.id),
-          },
-        },
-        0.95,
-        "HIGH",
-        `dbcanon:${rec.canonicalKey}:${rec.id}`
-      );
+  // Stage 1: Indexing and setup
+  console.log("[PROGRESS] Stage 1: Indexing records");
+  const byTxId = new Map<string, PrismaRecord[]>();
+  const byCanonical = new Map<string, PrismaRecord[]>();
+  for (const r of records) {
+    if (r.txId) {
+      const arr = byTxId.get(r.txId) || [];
+      arr.push(r);
+      byTxId.set(r.txId, arr);
     }
+    if (r.canonicalKey) {
+      const arr = byCanonical.get(r.canonicalKey) || [];
+      arr.push(r);
+      byCanonical.set(r.canonicalKey, arr);
+    }
+    await updateStageProgress(100 / records.length, 0);
   }
 
-  // ---------------- Stage B: Batch (current upload) strict duplicates ----------------
-  console.log("[BATCH] Starting batch duplicate detection...");
+  // ---------------- Stage 2: Historical (DB) strict duplicates ----------------
+  console.time("Historical duplicate detection");
+  console.log("[PROGRESS] Stage 2: Historical duplicate detection");
+
+  // Pre-identify potential duplicates using bulk data
+  const historicalDuplicates: PrismaRecord[] = [];
+
+  for (const rec of records) {
+    if (alreadyFlaggedRecordIds.has(rec.id)) continue;
+
+    // Quick pre-check before expensive database query
+    if (rec.txId && existingTxIds.has(rec.txId)) {
+      historicalDuplicates.push(rec);
+    } else if (rec.canonicalKey && existingCanonicalKeys.has(rec.canonicalKey)) {
+      historicalDuplicates.push(rec);
+    }
+    await updateStageProgress(100 / records.length, 1);
+  }
+
+  // Process historical duplicates
+  for (const rec of historicalDuplicates) {
+    if (rec.txId && !alreadyFlaggedRecordIds.has(rec.id)) {
+      const prev = await prisma.record.findMany({
+        where: {
+          companyId,
+          txId: rec.txId,
+          uploadId: { not: uploadId },
+        },
+        select: {
+          id: true,
+          txId: true,
+          partner: true,
+          normalizedPartner: true,
+          amount: true,
+          currency: true,
+          normalizedCurrency: true,
+          date: true,
+          createdAt: true,
+        },
+        orderBy: { createdAt: "desc" },
+        take: 50,
+      });
+
+      const matches = prev.filter((p: any) => isStrictDuplicate(rec, p));
+      if (matches.length > 0) {
+        await emit(
+          RULE.DUP_IN_DB__TXID,
+          [rec],
+          {
+            threatType: RULE.DUP_IN_DB__TXID,
+            amount: rec.amount ?? null,
+            partner: rec.partner ?? null,
+            txId: rec.txId ?? null,
+            datasetStats: baseStats,
+            additionalContext: {
+              scope: "db_prior_same_txid",
+              priorCount: matches.length,
+              priorIds: matches.slice(0, 5).map((m) => m.id),
+            },
+          },
+          0.98,
+          "HIGH",
+          `dbtx:${rec.txId}:${rec.id}`
+        );
+      }
+    }
+
+    if (rec.canonicalKey && !alreadyFlaggedRecordIds.has(rec.id)) {
+      const prev = await prisma.record.findMany({
+        where: {
+          companyId,
+          canonicalKey: rec.canonicalKey,
+          uploadId: { not: uploadId },
+        },
+        select: { id: true },
+        orderBy: { createdAt: "desc" },
+        take: 50,
+      });
+
+      if (prev.length > 0) {
+        await emit(
+          RULE.DUP_IN_DB__CANONICAL,
+          [rec],
+          {
+            threatType: RULE.DUP_IN_DB__CANONICAL,
+            amount: rec.amount ?? null,
+            partner: rec.partner ?? null,
+            txId: rec.txId ?? null,
+            datasetStats: baseStats,
+            additionalContext: {
+              scope: "db_prior_same_canonical",
+              canonicalKey: rec.canonicalKey,
+              priorCount: prev.length,
+              priorIds: prev.slice(0, 5).map((m) => m.id),
+            },
+          },
+          0.95,
+          "HIGH",
+          `dbcanon:${rec.canonicalKey}:${rec.id}`
+        );
+      }
+    }
+
+    await updateStageProgress(100 / historicalDuplicates.length, 1);
+  }
+  console.timeEnd("Historical duplicate detection");
+
+  // ---------------- Stage 3: Batch (current upload) strict duplicates ----------------
+  console.time("Batch duplicate detection");
+  console.log("[PROGRESS] Stage 3: Batch duplicate detection");
+
   // B1. TXID clusters
+  const totalBatches = byTxId.size + byCanonical.size;
+  let batchesProcessed = 0;
+
   for (const [txId, list] of byTxId.entries()) {
     if (list.length < 2) continue;
     const sorted = list.slice().sort((a, b) => (a.date?.getTime() || 0) - (b.date?.getTime() || 0));
@@ -362,6 +527,9 @@ export async function detectLeaks(records: PrismaRecord[], uploadId: string, com
         fullAmountSum: sorted.reduce((s, r) => s + (r.amount ?? 0), 0),
       }
     );
+
+    batchesProcessed++;
+    await updateStageProgress(100 / totalBatches, 2);
   }
 
   // B2. Canonical clusters
@@ -400,116 +568,36 @@ export async function detectLeaks(records: PrismaRecord[], uploadId: string, com
         fullAmountSum: sorted.reduce((s, r) => s + (r.amount ?? 0), 0),
       }
     );
-  }
 
-  // ------------------ Stage C: Vector similarity FIRST ----------------
-  console.log("[SIMILARITY] Starting similarity detection...");
-  let similarityChecks = 0;
-  let similarityMatches = 0;
+    batchesProcessed++;
+    await updateStageProgress(100 / totalBatches, 2);
+  }
+  console.timeEnd("Batch duplicate detection");
+
+  // ------------------ Stage 4: Vector similarity with batching ----------------
+  console.time("Similarity detection");
+  console.log("[PROGRESS] Stage 4: Similarity detection");
 
   // Track which records have already been flagged by similarity to prevent double-counting
   const similarityFlaggedRecordIds = new Set<string>();
 
-  for (const rec of records) {
-    if (alreadyFlaggedRecordIds.has(rec.id) || similarityFlaggedRecordIds.has(rec.id)) continue;
-
-    const embedding = parseEmbedding(rec.embeddingJson);
-    if (!embedding) {
-      console.log(`[SIMILARITY] Record ${rec.id} has no valid embedding`);
-      continue;
-    }
-
-    similarityChecks++;
-    console.log(`[SIMILARITY] Checking record ${rec.id} with embedding length ${embedding.length}`);
-
-    const { localPrev, global } = await findSimilarForEmbedding(
+  if (recordsWithEmbeddings.length > 0) {
+    await processSimilarityInBatches(
+      records.filter((r) => !alreadyFlaggedRecordIds.has(r.id) && r.embeddingJson),
       companyId,
       uploadId,
-      embedding,
-      10,
-      { minScore: 0.5, useVectorIndex: true }
+      alreadyFlaggedRecordIds,
+      similarityFlaggedRecordIds,
+      emit,
+      async (processed, totalSimilarity, threats) => {
+        await updateStageProgress((100 * processed) / totalSimilarity, 3);
+      }
     );
-
-    console.log(
-      `[SIMILARITY] Record ${rec.id} - local matches: ${localPrev.length}, global: ${global.length}`
-    );
-
-    // Local near-duplicate
-    const bestLocal = localPrev
-      .filter((m) => m.similarity >= SIMILARITY_DUP_THRESHOLD)
-      .sort((a, b) => b.similarity - a.similarity)[0];
-
-    // Global suspicious similarity
-    const bestGlobal = global
-      .filter((m) => m.similarity >= SIMILARITY_SUSPICIOUS_THRESHOLD)
-      .sort((a, b) => b.similarity - a.similarity)[0];
-
-    // Prioritize local duplicates over global similarities
-    if (bestLocal) {
-      similarityMatches++;
-      similarityFlaggedRecordIds.add(rec.id); // Mark as flagged by similarity
-      console.log(
-        `[SIMILARITY] FOUND LOCAL MATCH: ${rec.id} -> ${
-          bestLocal.id
-        } (similarity: ${bestLocal.similarity.toFixed(4)})`
-      );
-      await emit(
-        RULE.SIMILARITY_MATCH,
-        [rec],
-        {
-          threatType: RULE.SIMILARITY_MATCH,
-          amount: rec.amount ?? null,
-          partner: rec.partner ?? null,
-          txId: rec.txId ?? null,
-          datasetStats: baseStats,
-          additionalContext: {
-            scope: "vector_local_prev",
-            neighborId: bestLocal.id,
-            neighborPartner: bestLocal.partner,
-            neighborAmount: bestLocal.amount,
-            similarity: bestLocal.similarity,
-          },
-        },
-        0.96,
-        "HIGH",
-        `vecdup_prev:${rec.id}->${bestLocal.id}`
-      );
-    } else if (bestGlobal) {
-      similarityMatches++;
-      similarityFlaggedRecordIds.add(rec.id); // Mark as flagged by similarity
-      console.log(
-        `[SIMILARITY] FOUND GLOBAL MATCH: ${rec.id} -> ${
-          bestGlobal.id
-        } (similarity: ${bestGlobal.similarity.toFixed(4)})`
-      );
-      await emit(
-        RULE.SIMILARITY_MATCH,
-        [rec],
-        {
-          threatType: RULE.SIMILARITY_MATCH,
-          amount: rec.amount ?? null,
-          partner: rec.partner ?? null,
-          txId: rec.txId ?? null,
-          datasetStats: baseStats,
-          additionalContext: {
-            scope: "vector_global",
-            neighborId: bestGlobal.id,
-            neighborCompany: bestGlobal.companyId,
-            neighborPartner: bestGlobal.partner,
-            neighborAmount: bestGlobal.amount,
-            similarity: bestGlobal.similarity,
-          },
-        },
-        0.87,
-        "MEDIUM",
-        `vecsim:${rec.id}->${bestGlobal.id}`
-      );
-    }
+  } else {
+    // Skip similarity stage if no embeddings
+    await updateStageProgress(100, 3);
   }
-
-  console.log(
-    `[SIMILARITY] Completed: ${similarityChecks} checks, ${similarityMatches} matches found`
-  );
+  console.timeEnd("Similarity detection");
 
   // ---------------- Summary ----------------
   const uniqueFlaggedRecords = new Set<string>(
@@ -545,10 +633,151 @@ export async function detectLeaks(records: PrismaRecord[], uploadId: string, com
     byRule,
   };
 
+  console.timeEnd("Total leak detection time");
   return { threatsCreated, summary };
 }
 
-const AI_EXPLAIN_ASYNC = process.env.AI_EXPLAIN_ASYNC !== "false";
+async function processSimilarityInBatches(
+  records: PrismaRecord[],
+  companyId: string,
+  uploadId: string,
+  alreadyFlaggedRecordIds: Set<string>,
+  similarityFlaggedRecordIds: Set<string>,
+  emit: EmitFunction,
+  onProgress?: (processed: number, total: number, threats: number) => Promise<void>
+) {
+  const batches: PrismaRecord[][] = [];
+
+  for (let i = 0; i < records.length; i += SIMILARITY_BATCH_SIZE) {
+    batches.push(records.slice(i, i + SIMILARITY_BATCH_SIZE));
+  }
+
+  console.log(`Processing similarity in ${batches.length} batches`);
+
+  let similarityProcessed = 0;
+  const totalSimilarity = records.length;
+
+  for (const [batchIndex, batch] of batches.entries()) {
+    console.log(`Similarity batch ${batchIndex + 1}/${batches.length}`);
+
+    const batchPromises = batch.map(async (rec: PrismaRecord) => {
+      if (alreadyFlaggedRecordIds.has(rec.id) || similarityFlaggedRecordIds.has(rec.id)) {
+        similarityProcessed++;
+        if (onProgress) {
+          await onProgress(similarityProcessed, totalSimilarity, 0);
+        }
+        return;
+      }
+
+      const embedding = parseEmbedding(rec.embeddingJson);
+      if (!embedding) {
+        similarityProcessed++;
+        if (onProgress) {
+          await onProgress(similarityProcessed, totalSimilarity, 0);
+        }
+        return;
+      }
+
+      try {
+        const { localPrev, global } = await findSimilarForEmbedding(
+          companyId,
+          uploadId,
+          embedding,
+          SIMILARITY_SEARCH_LIMIT,
+          { minScore: 0.5, useVectorIndex: true }
+        );
+
+        // Local near-duplicate
+        const bestLocal = localPrev
+          .filter((m) => m.similarity >= SIMILARITY_DUP_THRESHOLD)
+          .sort((a, b) => b.similarity - a.similarity)[0];
+
+        // Global suspicious similarity
+        const bestGlobal = global
+          .filter((m) => m.similarity >= SIMILARITY_SUSPICIOUS_THRESHOLD)
+          .sort((a, b) => b.similarity - a.similarity)[0];
+
+        // Prioritize local duplicates over global similarities
+        if (bestLocal) {
+          similarityFlaggedRecordIds.add(rec.id);
+          console.log(
+            `[SIMILARITY] FOUND LOCAL MATCH: ${rec.id} -> ${
+              bestLocal.id
+            } (similarity: ${bestLocal.similarity.toFixed(4)})`
+          );
+          await emit(
+            RULE.SIMILARITY_MATCH,
+            [rec],
+            {
+              threatType: RULE.SIMILARITY_MATCH,
+              amount: rec.amount ?? null,
+              partner: rec.partner ?? null,
+              txId: rec.txId ?? null,
+              datasetStats: {
+                mean: 0,
+                max: 0,
+                totalRecords: 0,
+              },
+              additionalContext: {
+                scope: "vector_local_prev",
+                neighborId: bestLocal.id,
+                neighborPartner: bestLocal.partner,
+                neighborAmount: bestLocal.amount,
+                similarity: bestLocal.similarity,
+              },
+            },
+            0.96,
+            "HIGH",
+            `vecdup_prev:${rec.id}->${bestLocal.id}`
+          );
+        } else if (bestGlobal) {
+          similarityFlaggedRecordIds.add(rec.id);
+          console.log(
+            `[SIMILARITY] FOUND GLOBAL MATCH: ${rec.id} -> ${
+              bestGlobal.id
+            } (similarity: ${bestGlobal.similarity.toFixed(4)})`
+          );
+          await emit(
+            RULE.SIMILARITY_MATCH,
+            [rec],
+            {
+              threatType: RULE.SIMILARITY_MATCH,
+              amount: rec.amount ?? null,
+              partner: rec.partner ?? null,
+              txId: rec.txId ?? null,
+              datasetStats: {
+                mean: 0,
+                max: 0,
+                totalRecords: 0,
+              },
+              additionalContext: {
+                scope: "vector_global",
+                neighborId: bestGlobal.id,
+                neighborCompany: bestGlobal.companyId,
+                neighborPartner: bestGlobal.partner,
+                neighborAmount: bestGlobal.amount,
+                similarity: bestGlobal.similarity,
+              },
+            },
+            0.87,
+            "MEDIUM",
+            `vecsim:${rec.id}->${bestGlobal.id}`
+          );
+        }
+      } catch (error) {
+        console.error(`Similarity search failed for record ${rec.id}:`, error);
+      } finally {
+        similarityProcessed++;
+        if (onProgress) {
+          await onProgress(similarityProcessed, totalSimilarity, 0);
+        }
+      }
+    });
+
+    // Process batch with timeout
+    await Promise.allSettled(batchPromises);
+  }
+}
 
 async function createAIContextualizedThreat(
   companyId: string,
@@ -558,24 +787,22 @@ async function createAIContextualizedThreat(
   confidenceScore: number,
   context: ThreatContext
 ) {
-  if (AI_EXPLAIN_ASYNC) {
-    const short = `[${threatType}] ${JSON.stringify(context.additionalContext).slice(0, 180)}...`;
-    const t = await prisma.threat.create({
-      data: { companyId, uploadId, recordId, threatType, description: short, confidenceScore },
-    });
-    await publish("threat.explain", { threatId: t.id, context });
-    return t;
-  } else {
-    const aiExplanation = await generateThreatExplanation(context);
-    return prisma.threat.create({
-      data: {
-        companyId,
-        uploadId,
-        recordId,
-        threatType,
-        description: aiExplanation,
-        confidenceScore,
+  // Use ONLY static explanation - no AI calls
+  const staticExplanation = generateStaticExplanation(context);
+
+  const threat = await prisma.threat.create({
+    data: {
+      companyId,
+      uploadId,
+      recordId,
+      threatType,
+      description: staticExplanation,
+      confidenceScore,
+      metadata: {
+        aiContext: context,
       },
-    });
-  }
+    },
+  });
+
+  return threat;
 }

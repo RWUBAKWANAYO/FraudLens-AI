@@ -1,42 +1,81 @@
-import * as amqp from "amqplib";
+import { getChannel, closeConnections, checkConnectionHealth } from "./connectionManager";
 
-// Type assertions for the connection and channel
-interface ExtendedConnection extends amqp.Connection {
-  createChannel(): Promise<amqp.Channel>;
-}
+const MAX_PUBLISH_RETRIES = 3;
+const PUBLISH_RETRY_DELAY = 1000;
 
-let conn: ExtendedConnection | null = null;
-let ch: amqp.Channel | null = null;
+export async function publish(queue: string, msg: any, retryCount = 0): Promise<boolean> {
+  try {
+    const channel = await getChannel();
+    await channel.assertQueue(queue, { durable: true });
 
-export async function getChannel(): Promise<amqp.Channel> {
-  if (ch) return ch;
+    const success = channel.sendToQueue(queue, Buffer.from(JSON.stringify(msg)), {
+      persistent: true,
+    });
 
-  const url = process.env.RABBIT_URL!;
-  conn = (await amqp.connect(url)) as ExtendedConnection;
-  ch = await conn.createChannel();
+    if (!success) {
+      throw new Error("Message not queued (flow control)");
+    }
 
-  await ch.prefetch(Number(process.env.WORKER_PREFETCH || 8));
-  return ch;
-}
+    return true;
+  } catch (error) {
+    console.error(`Failed to publish to ${queue} (attempt ${retryCount + 1}):`, error);
 
-export async function publish(queue: string, msg: any) {
-  const channel = await getChannel();
-  await channel.assertQueue(queue, { durable: true });
-  channel.sendToQueue(queue, Buffer.from(JSON.stringify(msg)), { persistent: true });
+    if (retryCount < MAX_PUBLISH_RETRIES) {
+      await new Promise((resolve) => setTimeout(resolve, PUBLISH_RETRY_DELAY * (retryCount + 1)));
+      return publish(queue, msg, retryCount + 1);
+    }
+
+    return false;
+  }
 }
 
 export async function consume(queue: string, handler: (payload: any) => Promise<void>) {
-  const channel = await getChannel();
-  await channel.assertQueue(queue, { durable: true });
-  await channel.consume(queue, async (msg) => {
-    if (!msg) return;
-    try {
-      const payload = JSON.parse(msg.content.toString());
-      await handler(payload);
-      channel.ack(msg);
-    } catch (err) {
-      console.error(`[worker:${queue}]`, err);
-      channel.nack(msg, false, false); // dead-letter on failure
-    }
-  });
+  try {
+    const channel = await getChannel();
+    await channel.assertQueue(queue, { durable: true });
+
+    console.log(`Starting consumer for queue: ${queue}`);
+
+    await channel.consume(
+      queue,
+      async (msg) => {
+        if (!msg) return;
+
+        try {
+          const payload = JSON.parse(msg.content.toString());
+          await handler(payload);
+          channel.ack(msg);
+        } catch (error) {
+          console.error(`Error processing message from ${queue}:`, error);
+
+          // Check if we should nack or handle differently based on error type
+          if (error instanceof Error && error.message.includes("ECONNRESET")) {
+            // Connection error, don't nack to avoid infinite retries during outages
+            console.log("Connection error detected, pausing consumption");
+            channel.nack(msg, false, false); // Send to dead letter
+          } else {
+            // Application error, retry later
+            channel.nack(msg, false, true);
+          }
+        }
+      },
+      { noAck: false }
+    );
+  } catch (error) {
+    console.error(`Failed to start consumer for ${queue}:`, error);
+
+    // Retry consumption after delay
+    setTimeout(() => consume(queue, handler), 5000);
+  }
 }
+
+// Graceful shutdown handler
+process.on("SIGTERM", async () => {
+  console.log("SIGTERM received, closing RabbitMQ connections");
+  await closeConnections();
+});
+
+process.on("SIGINT", async () => {
+  console.log("SIGINT received, closing RabbitMQ connections");
+  await closeConnections();
+});

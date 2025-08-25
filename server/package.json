@@ -3,6 +3,7 @@
   "version": "1.0.0",
   "main": "dist/server.js",
   "scripts": {
+    "cleanup": "pkill -f 'node.*workers' || true",
     "db:seed": "ts-node-dev prisma/seed.ts",
     "db:reset": "prisma migrate reset && npm run db:seed",
     "start:workers": "node dist/workers/index.js",

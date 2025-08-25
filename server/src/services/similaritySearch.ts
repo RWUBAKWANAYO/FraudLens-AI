@@ -58,6 +58,7 @@ export function parseEmbedding(json: Prisma.JsonValue | null): number[] | null {
 
 /**
  * Vector search using TiDB VEC_COSINE_DISTANCE with safe fallback.
+ * Optimized with parallel queries and timeout protection.
  */
 export async function findSimilarForEmbedding(
   companyId: string,
@@ -73,147 +74,165 @@ export async function findSimilarForEmbedding(
     `[SIMILARITY_SEARCH] Starting for company ${companyId}, embedding length: ${embedding.length}`
   );
 
-  // ---- Prefer native vector index if available ----
-  if (preferVector) {
-    try {
-      console.log("[SIMILARITY_SEARCH] Attempting TiDB vector search...");
-      const vecText = JSON.stringify(embedding);
-
-      const localRows = await prisma.$queryRaw<Array<SimilarRecord & { distance?: number }>>`
-        SELECT
-          id, companyId, uploadId, txId, partner, amount, date,
-          1 - VEC_COSINE_DISTANCE(embeddingVec, ${vecText}) AS similarity
-        FROM Record
-        WHERE companyId = ${companyId}
-          AND (${uploadId} IS NULL OR uploadId <> ${uploadId})
-          AND embeddingVec IS NOT NULL
-        ORDER BY VEC_COSINE_DISTANCE(embeddingVec, ${vecText}) ASC
-        LIMIT ${k}
-      `;
-
-      console.log(`[SIMILARITY_SEARCH] TiDB local search returned ${localRows?.length || 0} rows`);
-
-      const localPrev = (localRows ?? [])
-        .map((r) => ({ ...r, similarity: r.similarity ?? 1 - (r as any).distance }))
-        .filter((r) => r.similarity >= minScore && r.similarity < 0.9999);
-
-      const globalRows = await prisma.$queryRaw<Array<SimilarRecord & { distance?: number }>>`
-        SELECT
-          id, companyId, uploadId, txId, partner, amount, date,
-          1 - VEC_COSINE_DISTANCE(embeddingVec, ${vecText}) AS similarity
-        FROM Record
-        WHERE companyId <> ${companyId}
-          AND embeddingVec IS NOT NULL
-        ORDER BY VEC_COSINE_DISTANCE(embeddingVec, ${vecText}) ASC
-        LIMIT ${k}
-      `;
-
-      console.log(
-        `[SIMILARITY_SEARCH] TiDB global search returned ${globalRows?.length || 0} rows`
-      );
-
-      const global = (globalRows ?? [])
-        .map((r) => ({ ...r, similarity: r.similarity ?? 1 - (r as any).distance }))
-        .filter((r) => r.similarity >= minScore && r.similarity < 0.9999);
-
-      console.log(
-        `[SIMILARITY_SEARCH] TiDB results - local: ${localPrev.length}, global: ${global.length}`
-      );
-      return { localPrev, global };
-    } catch (err) {
-      console.warn("[SIMILARITY_SEARCH] TiDB vector search failed; falling back:", err);
+  // Set timeout for similarity search (15 seconds)
+  const timeoutPromise = new Promise<{ localPrev: SimilarRecord[]; global: SimilarRecord[] }>(
+    (resolve) => {
+      setTimeout(() => {
+        console.log("[SIMILARITY_SEARCH] Timeout reached, returning empty results");
+        resolve({ localPrev: [], global: [] });
+      }, 15000);
     }
-  }
-
-  // ---- Fallback: compute cosine over JSON embeddings ----
-  console.log("[SIMILARITY_SEARCH] Using fallback JSON embedding search");
-
-  const localCandidates = await prisma.record.findMany({
-    where: {
-      companyId,
-      ...(uploadId ? { uploadId: { not: uploadId } } : {}),
-      NOT: { embeddingJson: { equals: null } },
-    },
-    select: {
-      id: true,
-      companyId: true,
-      uploadId: true,
-      txId: true,
-      partner: true,
-      amount: true,
-      date: true,
-      embeddingJson: true,
-    },
-    orderBy: { createdAt: "desc" },
-    take: 1000,
-  });
-
-  console.log(
-    `[SIMILARITY_SEARCH] Found ${localCandidates.length} local candidates with embeddings`
   );
 
-  const localPrev = localCandidates
-    .map((r) => {
-      const emb = parseEmbedding(r.embeddingJson);
-      if (!emb) return null;
-      const similarity = cosineSimilarity(embedding, emb);
-      return {
-        id: r.id,
-        companyId: r.companyId,
-        uploadId: r.uploadId,
-        txId: r.txId,
-        partner: r.partner,
-        amount: r.amount,
-        date: r.date,
-        similarity,
-      } as SimilarRecord;
-    })
-    .filter((x): x is SimilarRecord => !!x && x.similarity >= minScore && x.similarity < 0.9999)
-    .sort((a, b) => b.similarity - a.similarity)
-    .slice(0, k);
+  const searchPromise = (async () => {
+    // ---- Prefer native vector index if available ----
+    if (preferVector) {
+      try {
+        console.log("[SIMILARITY_SEARCH] Attempting TiDB vector search...");
+        const vecText = JSON.stringify(embedding);
 
-  const globalCandidates = await prisma.record.findMany({
-    where: { companyId: { not: companyId }, NOT: { embeddingJson: { equals: null } } },
-    select: {
-      id: true,
-      companyId: true,
-      uploadId: true,
-      txId: true,
-      partner: true,
-      amount: true,
-      date: true,
-      embeddingJson: true,
-    },
-    orderBy: { createdAt: "desc" },
-    take: 1000,
-  });
+        // Use Promise.all for parallel searches
+        const [localRows, globalRows] = await Promise.all([
+          prisma.$queryRaw<Array<SimilarRecord & { distance?: number }>>`
+            SELECT
+              id, companyId, uploadId, txId, partner, amount, date,
+              1 - VEC_COSINE_DISTANCE(embeddingVec, ${vecText}) AS similarity
+            FROM Record
+            WHERE companyId = ${companyId}
+              AND (${uploadId} IS NULL OR uploadId <> ${uploadId})
+              AND embeddingVec IS NOT NULL
+            ORDER BY VEC_COSINE_DISTANCE(embeddingVec, ${vecText}) ASC
+            LIMIT ${k}
+          `,
+          prisma.$queryRaw<Array<SimilarRecord & { distance?: number }>>`
+            SELECT
+              id, companyId, uploadId, txId, partner, amount, date,
+              1 - VEC_COSINE_DISTANCE(embeddingVec, ${vecText}) AS similarity
+            FROM Record
+            WHERE companyId <> ${companyId}
+              AND embeddingVec IS NOT NULL
+            ORDER BY VEC_COSINE_DISTANCE(embeddingVec, ${vecText}) ASC
+            LIMIT ${k}
+          `,
+        ]);
 
-  console.log(
-    `[SIMILARITY_SEARCH] Found ${globalCandidates.length} global candidates with embeddings`
-  );
+        console.log(
+          `[SIMILARITY_SEARCH] TiDB local search returned ${localRows?.length || 0} rows`
+        );
+        console.log(
+          `[SIMILARITY_SEARCH] TiDB global search returned ${globalRows?.length || 0} rows`
+        );
 
-  const global = globalCandidates
-    .map((r) => {
-      const emb = parseEmbedding(r.embeddingJson);
-      if (!emb) return null;
-      const similarity = cosineSimilarity(embedding, emb);
-      return {
-        id: r.id,
-        companyId: r.companyId,
-        uploadId: r.uploadId,
-        txId: r.txId,
-        partner: r.partner,
-        amount: r.amount,
-        date: r.date,
-        similarity,
-      } as SimilarRecord;
-    })
-    .filter((x): x is SimilarRecord => !!x && x.similarity >= minScore && x.similarity < 0.9999)
-    .sort((a, b) => b.similarity - a.similarity)
-    .slice(0, k);
+        const localPrev = (localRows ?? [])
+          .map((r) => ({ ...r, similarity: r.similarity ?? 1 - (r as any).distance }))
+          .filter((r) => r.similarity >= minScore && r.similarity < 0.9999);
 
-  console.log(
-    `[SIMILARITY_SEARCH] Fallback results - local: ${localPrev.length}, global: ${global.length}`
-  );
-  return { localPrev, global };
+        const global = (globalRows ?? [])
+          .map((r) => ({ ...r, similarity: r.similarity ?? 1 - (r as any).distance }))
+          .filter((r) => r.similarity >= minScore && r.similarity < 0.9999);
+
+        console.log(
+          `[SIMILARITY_SEARCH] TiDB results - local: ${localPrev.length}, global: ${global.length}`
+        );
+        return { localPrev, global };
+      } catch (err) {
+        console.warn("[SIMILARITY_SEARCH] TiDB vector search failed; falling back:", err);
+      }
+    }
+
+    // ---- Fallback: compute cosine over JSON embeddings ----
+    console.log("[SIMILARITY_SEARCH] Using fallback JSON embedding search");
+
+    const [localCandidates, globalCandidates] = await Promise.all([
+      prisma.record.findMany({
+        where: {
+          companyId,
+          ...(uploadId ? { uploadId: { not: uploadId } } : {}),
+          NOT: { embeddingJson: { equals: null } },
+        },
+        select: {
+          id: true,
+          companyId: true,
+          uploadId: true,
+          txId: true,
+          partner: true,
+          amount: true,
+          date: true,
+          embeddingJson: true,
+        },
+        orderBy: { createdAt: "desc" },
+        take: 100, // Reduced from 1000 for performance
+      }),
+      prisma.record.findMany({
+        where: {
+          companyId: { not: companyId },
+          NOT: { embeddingJson: { equals: null } },
+        },
+        select: {
+          id: true,
+          companyId: true,
+          uploadId: true,
+          txId: true,
+          partner: true,
+          amount: true,
+          date: true,
+          embeddingJson: true,
+        },
+        orderBy: { createdAt: "desc" },
+        take: 100, // Reduced from 1000 for performance
+      }),
+    ]);
+
+    console.log(
+      `[SIMILARITY_SEARCH] Found ${localCandidates.length} local and ${globalCandidates.length} global candidates with embeddings`
+    );
+
+    const localPrev = localCandidates
+      .map((r) => {
+        const emb = parseEmbedding(r.embeddingJson);
+        if (!emb) return null;
+        const similarity = cosineSimilarity(embedding, emb);
+        return {
+          id: r.id,
+          companyId: r.companyId,
+          uploadId: r.uploadId,
+          txId: r.txId,
+          partner: r.partner,
+          amount: r.amount,
+          date: r.date,
+          similarity,
+        } as SimilarRecord;
+      })
+      .filter((x): x is SimilarRecord => !!x && x.similarity >= minScore && x.similarity < 0.9999)
+      .sort((a, b) => b.similarity - a.similarity)
+      .slice(0, k);
+
+    const global = globalCandidates
+      .map((r) => {
+        const emb = parseEmbedding(r.embeddingJson);
+        if (!emb) return null;
+        const similarity = cosineSimilarity(embedding, emb);
+        return {
+          id: r.id,
+          companyId: r.companyId,
+          uploadId: r.uploadId,
+          txId: r.txId,
+          partner: r.partner,
+          amount: r.amount,
+          date: r.date,
+          similarity,
+        } as SimilarRecord;
+      })
+      .filter((x): x is SimilarRecord => !!x && x.similarity >= minScore && x.similarity < 0.9999)
+      .sort((a, b) => b.similarity - a.similarity)
+      .slice(0, k);
+
+    console.log(
+      `[SIMILARITY_SEARCH] Fallback results - local: ${localPrev.length}, global: ${global.length}`
+    );
+    return { localPrev, global };
+  })();
+
+  // Race between search and timeout
+  return Promise.race([searchPromise, timeoutPromise]);
 }
