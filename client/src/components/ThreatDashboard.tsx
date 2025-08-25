@@ -24,7 +24,7 @@ export default function ThreatDashboard({ companyId }: { companyId: string }) {
       try {
         // This endpoint would need to be implemented in your backend
         const response = await fetch(
-          `${process.env.NEXT_PUBLIC_SERVER_URL}/threats?companyId=${companyId}`
+          `${process.env.NEXT_PUBLIC_SERVER_URL}/audit/threats?companyId=${companyId}`
         );
         const data = await response.json();
         setThreats(data);

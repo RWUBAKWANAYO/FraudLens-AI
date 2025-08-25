@@ -10,17 +10,74 @@ datasource db {
 
 /// Multi-tenant: a company owns uploads, records, alerts, and webhook subs
 model Company {
-  id        String                @id @default(uuid())
-  name      String
-  slug      String                @unique
-  createdAt DateTime              @default(now())
-  updatedAt DateTime              @updatedAt
-  alerts    Alert[]
-  records   Record[]
-  rules     Rule[]
-  threats   Threat[]
-  uploads   Upload[]
-  webhooks  WebhookSubscription[]
+  id          String                @id @default(uuid())
+  name        String
+  slug        String                @unique
+  createdAt   DateTime              @default(now())
+  updatedAt   DateTime              @updatedAt
+  alerts      Alert[]
+  records     Record[]
+  rules       Rule[]
+  threats     Threat[]
+  uploads     Upload[]
+  webhooks    WebhookSubscription[]
+  users       User[]
+  invitations Invitation[]
+
+  @@index([slug])
+}
+
+model User {
+  id                String       @id @default(uuid())
+  email             String       @unique
+  password          String
+  fullName          String
+  companyId         String
+  role              UserRole     @default(MEMBER)
+  isVerified        Boolean      @default(false)
+  verificationToken String?
+  resetToken        String?
+  resetTokenExpiry  DateTime?
+  lastLogin         DateTime?
+  createdAt         DateTime     @default(now())
+  updatedAt         DateTime     @updatedAt
+  company           Company      @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  invitedBy         User?        @relation("UserInvitations", fields: [invitedById], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  invitedById       String?
+  invitedUsers      User[]       @relation("UserInvitations")
+  sentInvitations   Invitation[]
+
+  @@index([companyId, email])
+  @@index([verificationToken])
+  @@index([resetToken])
+  @@index([invitedById])
+}
+
+enum UserRole {
+  ADMIN
+  MANAGER
+  ANALYST
+  MEMBER
+}
+
+model Invitation {
+  id          String   @id @default(uuid())
+  email       String
+  companyId   String
+  invitedById String
+  role        UserRole
+  token       String   @unique
+  expiresAt   DateTime
+  accepted    Boolean  @default(false)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  company     Company  @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  invitedBy   User     @relation(fields: [invitedById], references: [id], onDelete: Cascade)
+
+  @@index([companyId, email])
+  @@index([token])
+  @@index([expiresAt])
+  @@index([invitedById])
 }
 
 model Upload {

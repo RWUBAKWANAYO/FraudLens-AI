@@ -22,7 +22,7 @@ export default function RuleManager({ companyId }: { companyId: string }) {
     try {
       // This endpoint would need to be implemented in your backend
       const response = await fetch(
-        `${process.env.NEXT_PUBLIC_SERVER_URL}/rules?companyId=${companyId}`
+        `${process.env.NEXT_PUBLIC_SERVER_URL}/audit/rules?companyId=${companyId}`
       );
       const data = await response.json();
       setRules(data);
@@ -35,7 +35,7 @@ export default function RuleManager({ companyId }: { companyId: string }) {
     try {
       setLoading(true);
       // This endpoint would need to be implemented in your backend
-      const response = await fetch(`${process.env.NEXT_PUBLIC_SERVER_URL}/rules`, {
+      const response = await fetch(`${process.env.NEXT_PUBLIC_SERVER_URL}/audit/rules`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
@@ -63,7 +63,7 @@ export default function RuleManager({ companyId }: { companyId: string }) {
   const toggleRule = async (ruleId: string, enabled: boolean) => {
     try {
       // This endpoint would need to be implemented in your backend
-      const response = await fetch(`${process.env.NEXT_PUBLIC_SERVER_URL}/rules/${ruleId}`, {
+      const response = await fetch(`${process.env.NEXT_PUBLIC_SERVER_URL}/audit/rules/${ruleId}`, {
         method: "PATCH",
         headers: {
           "Content-Type": "application/json",

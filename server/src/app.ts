@@ -2,14 +2,18 @@
 import express from "express";
 import "dotenv/config";
 import cors from "cors";
-import { router } from "./routes";
+import { auditRouter } from "./routes/audit";
+import { authRouter } from "./routes/auth";
+import { usersRouter } from "./routes/users";
 
 const app = express();
 
 app.use(cors());
 app.use(express.json());
 
-app.use("/api/v1", router);
+app.use("/api/v1/audit", auditRouter);
+app.use("/api/v1/auth", authRouter);
+app.use("/api/v1/users", usersRouter);
 
 // ==================== EXPRESS ERROR HANDLING MIDDLEWARE ====================
 

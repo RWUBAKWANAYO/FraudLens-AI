@@ -32,7 +32,8 @@ exports.prisma = new client_1.PrismaClient({
                 "&acquire_timeout=" +
                 (process.env.DB_ACQUIRE_TIMEOUT || "60000") +
                 "&connect_timeout=60" +
-                "&socket_timeout=60",
+                "&socket_timeout=60" +
+                "&transaction_isolation=REPEATABLE_READ",
         },
     },
 });

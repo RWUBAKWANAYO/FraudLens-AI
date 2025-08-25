@@ -16,7 +16,7 @@ export default function RealTimeAlerts({ companyId }: { companyId: string }) {
 
   useEffect(() => {
     // Load initial alerts
-    fetch(`${process.env.NEXT_PUBLIC_SERVER_URL}/alerts?companyId=${companyId}`)
+    fetch(`${process.env.NEXT_PUBLIC_SERVER_URL}/audit/alerts?companyId=${companyId}`)
       .then((res) => res.json())
       .then((data) => {
         setAlerts(data.slice(0, 20));

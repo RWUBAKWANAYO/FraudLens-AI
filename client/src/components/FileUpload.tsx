@@ -28,7 +28,7 @@ export default function FileUpload({ companyId }: { companyId: string }) {
     formData.append("companyId", companyId);
 
     try {
-      const response = await fetch(`${process.env.NEXT_PUBLIC_SERVER_URL}/upload`, {
+      const response = await fetch(`${process.env.NEXT_PUBLIC_SERVER_URL}/audit/upload`, {
         method: "POST",
         body: formData,
       });

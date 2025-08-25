@@ -24,16 +24,19 @@ export default function SimilaritySearch({ companyId }: { companyId: string }) {
     setLoading(true);
     try {
       // This endpoint would need to be implemented in your backend
-      const response = await fetch(`${process.env.NEXT_PUBLIC_SERVER_URL}/similarity-search`, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          companyId,
-          text: query,
-        }),
-      });
+      const response = await fetch(
+        `${process.env.NEXT_PUBLIC_SERVER_URL}/audit/similarity-search`,
+        {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            companyId,
+            text: query,
+          }),
+        }
+      );
 
       const data = await response.json();
       setResults(data);
