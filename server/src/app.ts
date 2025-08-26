@@ -5,6 +5,7 @@ import cors from "cors";
 import { auditRouter } from "./routes/audit";
 import { authRouter } from "./routes/auth";
 import { usersRouter } from "./routes/users";
+import { webhookRouter } from "./routes/webhook";
 
 const app = express();
 
@@ -14,6 +15,7 @@ app.use(express.json());
 app.use("/api/v1/audit", auditRouter);
 app.use("/api/v1/auth", authRouter);
 app.use("/api/v1/users", usersRouter);
+app.use("/api/v1/webhooks", webhookRouter);
 
 // ==================== EXPRESS ERROR HANDLING MIDDLEWARE ====================
 

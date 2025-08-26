@@ -1,3 +1,4 @@
+// server/src/queue/webhookQueue.ts
 import { publish, consume } from "./bus";
 import { webhookService } from "../services/webhooks";
 import { prisma } from "../config/db";
@@ -36,14 +37,15 @@ export async function queueWebhook(
 }
 
 export async function startWebhookConsumer() {
-  await consume(WEBHOOK_QUEUE, async (message: WebhookMessage) => {
+  await consume(WEBHOOK_QUEUE, async (message: WebhookMessage, channel: any, msg: any) => {
     const result = await safeTry(async () => {
       const webhook = await prisma.webhookSubscription.findUnique({
         where: { id: message.webhookId },
       });
 
       if (!webhook || !webhook.active) {
-        console.log(`Webhook ${message.webhookId} not found or inactive`);
+        console.log(`Webhook ${message.webhookId} not found or inactive - acknowledging message`);
+        channel.ack(msg); // ✅ CRITICAL: Acknowledge the message even if webhook not found
         return;
       }
 
@@ -51,10 +53,13 @@ export async function startWebhookConsumer() {
         event: message.event,
         data: message.data,
       });
+
+      channel.ack(msg); // Acknowledge successful processing
     }, "WebhookQueueConsumer");
 
     if (result.error) {
       await handleWebhookError(result.error, message);
+      channel.ack(msg); // Still acknowledge to prevent infinite retries
     }
   });
 

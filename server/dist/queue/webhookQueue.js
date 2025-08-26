@@ -12,6 +12,7 @@ Object.defineProperty(exports, "__esModule", { value: true });
 exports.queueWebhook = queueWebhook;
 exports.startWebhookConsumer = startWebhookConsumer;
 exports.startWebhookConsumerEnhanced = startWebhookConsumerEnhanced;
+// server/src/queue/webhookQueue.ts
 const bus_1 = require("./bus");
 const webhooks_1 = require("../services/webhooks");
 const db_1 = require("../config/db");
@@ -35,22 +36,25 @@ function queueWebhook(webhookId, companyId, event, data) {
 }
 function startWebhookConsumer() {
     return __awaiter(this, void 0, void 0, function* () {
-        yield (0, bus_1.consume)(WEBHOOK_QUEUE, (message) => __awaiter(this, void 0, void 0, function* () {
+        yield (0, bus_1.consume)(WEBHOOK_QUEUE, (message, channel, msg) => __awaiter(this, void 0, void 0, function* () {
             const result = yield (0, errorHandler_1.safeTry)(() => __awaiter(this, void 0, void 0, function* () {
                 const webhook = yield db_1.prisma.webhookSubscription.findUnique({
                     where: { id: message.webhookId },
                 });
                 if (!webhook || !webhook.active) {
-                    console.log(`Webhook ${message.webhookId} not found or inactive`);
+                    console.log(`Webhook ${message.webhookId} not found or inactive - acknowledging message`);
+                    channel.ack(msg); // ✅ CRITICAL: Acknowledge the message even if webhook not found
                     return;
                 }
                 yield webhooks_1.webhookService.deliverWithRetry(webhook, {
                     event: message.event,
                     data: message.data,
                 });
+                channel.ack(msg); // Acknowledge successful processing
             }), "WebhookQueueConsumer");
             if (result.error) {
                 yield handleWebhookError(result.error, message);
+                channel.ack(msg); // Still acknowledge to prevent infinite retries
             }
         }));
         // Start retry queue consumer

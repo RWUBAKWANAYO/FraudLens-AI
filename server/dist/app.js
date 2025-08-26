@@ -10,12 +10,14 @@ const cors_1 = __importDefault(require("cors"));
 const audit_1 = require("./routes/audit");
 const auth_1 = require("./routes/auth");
 const users_1 = require("./routes/users");
+const webhook_1 = require("./routes/webhook");
 const app = (0, express_1.default)();
 app.use((0, cors_1.default)());
 app.use(express_1.default.json());
 app.use("/api/v1/audit", audit_1.auditRouter);
 app.use("/api/v1/auth", auth_1.authRouter);
 app.use("/api/v1/users", users_1.usersRouter);
+app.use("/api/v1/webhooks", webhook_1.webhookRouter);
 // ==================== EXPRESS ERROR HANDLING MIDDLEWARE ====================
 // 404 handler
 app.use((_req, res) => {

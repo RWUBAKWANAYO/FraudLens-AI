@@ -86,3 +86,27 @@ export function createHttpError(
   error.response = options.response;
   return error;
 }
+
+export class WebhookError extends Error {
+  constructor(
+    message: string,
+    public readonly code: string,
+    public readonly statusCode: number = 500,
+    public readonly retryable: boolean = true
+  ) {
+    super(message);
+    this.name = "WebhookError";
+  }
+}
+
+export class WebhookValidationError extends WebhookError {
+  constructor(message: string) {
+    super(message, "WEBHOOK_VALIDATION_ERROR", 400, false);
+  }
+}
+
+export class WebhookTimeoutError extends WebhookError {
+  constructor(message: string) {
+    super(message, "WEBHOOK_TIMEOUT_ERROR", 504, true);
+  }
+}

@@ -1,5 +1,6 @@
 // server/src/workers/index.ts
 import { startEmbeddingWorker } from "./embeddingWorker";
+import { startWebhookConsumer } from "../queue/webhookQueue"; // Add this import
 import { getChannel, checkConnectionHealth, gracefulShutdown } from "../queue/connectionManager";
 
 (async function main() {
@@ -11,8 +12,14 @@ import { getChannel, checkConnectionHealth, gracefulShutdown } from "../queue/co
   while (retryCount < MAX_RETRIES) {
     try {
       await getChannel();
-      await Promise.all([startEmbeddingWorker()]);
-      console.log("Workers running: embeddings.generate, threat.explain");
+
+      // Start ALL workers including webhook consumer
+      await Promise.all([
+        startEmbeddingWorker(),
+        startWebhookConsumer(), // Add this line
+      ]);
+
+      console.log("Workers running: embeddings.generate, threat.explain, webhook.deliveries");
       break;
     } catch (error) {
       retryCount++;

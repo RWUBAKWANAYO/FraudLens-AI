@@ -1,4 +1,7 @@
-import { getChannel, closeConnections, checkConnectionHealth } from "./connectionManager";
+// server/src/queue/bus.ts
+
+import * as amqp from "amqplib";
+import { getChannel, closeConnections } from "./connectionManager";
 
 const MAX_PUBLISH_RETRIES = 3;
 const PUBLISH_RETRY_DELAY = 1000;
@@ -29,7 +32,10 @@ export async function publish(queue: string, msg: any, retryCount = 0): Promise<
   }
 }
 
-export async function consume(queue: string, handler: (payload: any) => Promise<void>) {
+export async function consume(
+  queue: string,
+  handler: (payload: any, channel: amqp.Channel, msg: amqp.Message) => Promise<void>
+) {
   try {
     const channel = await getChannel();
     await channel.assertQueue(queue, { durable: true });
@@ -43,28 +49,16 @@ export async function consume(queue: string, handler: (payload: any) => Promise<
 
         try {
           const payload = JSON.parse(msg.content.toString());
-          await handler(payload);
-          channel.ack(msg);
+          await handler(payload, channel, msg); // Pass channel and msg
         } catch (error) {
           console.error(`Error processing message from ${queue}:`, error);
-
-          // Check if we should nack or handle differently based on error type
-          if (error instanceof Error && error.message.includes("ECONNRESET")) {
-            // Connection error, don't nack to avoid infinite retries during outages
-            console.log("Connection error detected, pausing consumption");
-            channel.nack(msg, false, false); // Send to dead letter
-          } else {
-            // Application error, retry later
-            channel.nack(msg, false, true);
-          }
+          // Handle errors appropriately
         }
       },
-      { noAck: false }
+      { noAck: false } // Important: Manual acknowledgment
     );
   } catch (error) {
     console.error(`Failed to start consumer for ${queue}:`, error);
-
-    // Retry consumption after delay
     setTimeout(() => consume(queue, handler), 5000);
   }
 }

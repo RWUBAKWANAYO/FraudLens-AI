@@ -74,7 +74,7 @@ function handleFileUpload(req, res, next) {
         try {
             if (!req.file)
                 return res.status(400).json({ error: "No file uploaded" });
-            const companyId = req.body.companyId || null;
+            const companyId = req.user.companyId || null;
             if (!companyId)
                 return res.status(400).json({ error: "Missing companyId" });
             const buffer = req.file.buffer;

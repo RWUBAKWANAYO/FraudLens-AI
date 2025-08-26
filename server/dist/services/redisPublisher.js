@@ -10,6 +10,7 @@ var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, P, ge
 };
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.redisPublisher = exports.RedisPublisher = void 0;
+// server/src/services/redisPublisher.ts
 const redis_1 = require("../config/redis");
 class RedisPublisher {
     static getInstance() {

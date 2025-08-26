@@ -1,3 +1,4 @@
+// server/prisma/schema.prisma
 generator client {
   provider = "prisma-client-js"
 }
@@ -199,6 +200,7 @@ model WebhookSubscription {
   deliveries WebhookDelivery[]
 
   @@index([companyId, active])
+  @@index([active, companyId])
 }
 
 model WebhookDelivery {
@@ -216,6 +218,8 @@ model WebhookDelivery {
 
   @@index([webhookId, createdAt])
   @@index([success, environment])
+  @@index([webhookId, success, createdAt])
+  @@index([createdAt])
 }
 
 model Rule {

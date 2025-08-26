@@ -1,3 +1,4 @@
+// server/src/queue/connectionManager.ts
 import * as amqp from "amqplib";
 
 interface RabbitMQConnection {

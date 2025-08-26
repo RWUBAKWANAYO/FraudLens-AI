@@ -79,7 +79,7 @@ export async function handleFileUpload(req: Request, res: Response, next: NextFu
   try {
     if (!req.file) return res.status(400).json({ error: "No file uploaded" });
 
-    const companyId = (req.body.companyId as string) || null;
+    const companyId = (req.user!.companyId as string) || null;
     if (!companyId) return res.status(400).json({ error: "Missing companyId" });
 
     const buffer = req.file.buffer;

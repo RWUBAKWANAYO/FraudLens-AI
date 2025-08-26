@@ -12,45 +12,48 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
     return (mod && mod.__esModule) ? mod : { "default": mod };
 };
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.createWebhook = createWebhook;
+exports.createWebhook = void 0;
 exports.listWebhooks = listWebhooks;
 exports.updateWebhook = updateWebhook;
-exports.testWebhook = testWebhook;
 exports.deleteWebhook = deleteWebhook;
 const db_1 = require("../config/db");
-const webhooks_1 = require("../services/webhooks");
 const crypto_1 = __importDefault(require("crypto"));
-function createWebhook(req, res) {
-    return __awaiter(this, void 0, void 0, function* () {
-        try {
-            const { companyId, url, secret, events = ["threat.created"] } = req.body;
-            // Validate and format events as JSON array
-            const validEvents = Array.isArray(events)
-                ? events.filter((event) => typeof event === "string")
-                : ["threat.created"];
-            const webhook = yield db_1.prisma.webhookSubscription.create({
-                data: {
-                    companyId,
-                    url,
-                    secret: secret || generateRandomSecret(),
-                    events: validEvents, // This will be stored as JSON
-                    active: true,
-                },
-            });
-            res.json(webhook);
+const createWebhook = (req, res, next) => __awaiter(void 0, void 0, void 0, function* () {
+    var _a;
+    try {
+        const { url, events, secret } = req.body;
+        const companyId = (_a = req.user) === null || _a === void 0 ? void 0 : _a.companyId;
+        // This should never happen due to middleware, but just in case
+        if (!companyId) {
+            return res.status(401).json({ error: "Invalid authorization" });
         }
-        catch (error) {
-            console.error("Failed to create webhook:", error);
-            res.status(500).json({ error: "Failed to create webhook" });
-        }
-    });
-}
+        const webhook = yield db_1.prisma.webhookSubscription.create({
+            data: {
+                companyId,
+                url,
+                events,
+                secret: secret || crypto_1.default.randomBytes(32).toString("hex"),
+            },
+        });
+        res.status(201).json(Object.assign(Object.assign({}, webhook), { events: Array.isArray(webhook.events) ? webhook.events : JSON.parse(webhook.events) }));
+    }
+    catch (error) {
+        next(error);
+    }
+});
+exports.createWebhook = createWebhook;
 function listWebhooks(req, res) {
     return __awaiter(this, void 0, void 0, function* () {
+        var _a;
         try {
             const { companyId } = req.query;
-            if (!companyId) {
-                return res.status(400).json({ error: "companyId is required" });
+            const userCompanyId = (_a = req.user) === null || _a === void 0 ? void 0 : _a.companyId;
+            // Verify user is requesting their own company's webhooks
+            if (companyId !== userCompanyId) {
+                return res.status(403).json({
+                    error: "Access denied",
+                    message: "You can only access webhooks from your own company",
+                });
             }
             const webhooks = yield db_1.prisma.webhookSubscription.findMany({
                 where: { companyId: companyId },
@@ -104,39 +107,6 @@ function updateWebhook(req, res) {
         }
     });
 }
-function testWebhook(req, res) {
-    return __awaiter(this, void 0, void 0, function* () {
-        try {
-            const { webhookId } = req.params;
-            const webhook = yield db_1.prisma.webhookSubscription.findUnique({
-                where: { id: webhookId },
-            });
-            if (!webhook) {
-                return res.status(404).json({ error: "Webhook not found" });
-            }
-            const testPayload = {
-                event: "test",
-                data: {
-                    message: "Test webhook delivery",
-                    timestamp: new Date().toISOString(),
-                    environment: process.env.NODE_ENV,
-                },
-            };
-            const result = yield webhooks_1.webhookService.deliverWebhook(webhook, testPayload);
-            res.json({
-                success: result.success,
-                status: result.statusCode,
-                message: result.success ? "Webhook test successful" : "Webhook test failed",
-                error: result.error,
-                responseTime: result.responseTime,
-            });
-        }
-        catch (error) {
-            console.error("Webhook test failed:", error);
-            res.status(500).json({ error: "Webhook test failed" });
-        }
-    });
-}
 function deleteWebhook(req, res) {
     return __awaiter(this, void 0, void 0, function* () {
         try {
@@ -151,7 +121,4 @@ function deleteWebhook(req, res) {
             res.status(500).json({ error: "Failed to delete webhook" });
         }
     });
-}
-function generateRandomSecret() {
-    return crypto_1.default.randomBytes(32).toString("hex");
 }

@@ -1,4 +1,5 @@
 "use strict";
+// server/src/queue/bus.ts
 var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, P, generator) {
     function adopt(value) { return value instanceof P ? value : new P(function (resolve) { resolve(value); }); }
     return new (P || (P = Promise))(function (resolve, reject) {
@@ -48,27 +49,17 @@ function consume(queue, handler) {
                     return;
                 try {
                     const payload = JSON.parse(msg.content.toString());
-                    yield handler(payload);
-                    channel.ack(msg);
+                    yield handler(payload, channel, msg); // Pass channel and msg
                 }
                 catch (error) {
                     console.error(`Error processing message from ${queue}:`, error);
-                    // Check if we should nack or handle differently based on error type
-                    if (error instanceof Error && error.message.includes("ECONNRESET")) {
-                        // Connection error, don't nack to avoid infinite retries during outages
-                        console.log("Connection error detected, pausing consumption");
-                        channel.nack(msg, false, false); // Send to dead letter
-                    }
-                    else {
-                        // Application error, retry later
-                        channel.nack(msg, false, true);
-                    }
+                    // Handle errors appropriately
                 }
-            }), { noAck: false });
+            }), { noAck: false } // Important: Manual acknowledgment
+            );
         }
         catch (error) {
             console.error(`Failed to start consumer for ${queue}:`, error);
-            // Retry consumption after delay
             setTimeout(() => consume(queue, handler), 5000);
         }
     });

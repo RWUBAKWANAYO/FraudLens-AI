@@ -1,5 +1,6 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
+exports.WebhookTimeoutError = exports.WebhookValidationError = exports.WebhookError = void 0;
 exports.isAppError = isAppError;
 exports.isHttpError = isHttpError;
 exports.isDatabaseError = isDatabaseError;
@@ -42,3 +43,25 @@ function createHttpError(message, statusCode, options = {}) {
     error.response = options.response;
     return error;
 }
+class WebhookError extends Error {
+    constructor(message, code, statusCode = 500, retryable = true) {
+        super(message);
+        this.code = code;
+        this.statusCode = statusCode;
+        this.retryable = retryable;
+        this.name = "WebhookError";
+    }
+}
+exports.WebhookError = WebhookError;
+class WebhookValidationError extends WebhookError {
+    constructor(message) {
+        super(message, "WEBHOOK_VALIDATION_ERROR", 400, false);
+    }
+}
+exports.WebhookValidationError = WebhookValidationError;
+class WebhookTimeoutError extends WebhookError {
+    constructor(message) {
+        super(message, "WEBHOOK_TIMEOUT_ERROR", 504, true);
+    }
+}
+exports.WebhookTimeoutError = WebhookTimeoutError;

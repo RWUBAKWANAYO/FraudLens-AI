@@ -265,36 +265,48 @@ export async function detectLeaks(
     });
 
     // Webhook dispatch (with better error handling)
+    console.log("=== WEBHOOK PROCESSING STARTED ===");
+    console.log(`Company: ${companyId}, Threat: ${(t as any).id}`);
+
     try {
       const webhooks = await webhookService.getMockWebhooks(companyId);
+      console.log(`Found ${webhooks.length} webhooks for company ${companyId}`);
 
       for (const webhook of webhooks) {
-        await queueWebhook(webhook.id, companyId, "threat.created", {
-          threat: {
-            id: (t as any).id,
-            type: t.threatType,
-            confidence: t.confidenceScore,
-            description: t.description,
-            ruleId,
-            severity: SEVERITY[severity],
-          },
-          record: {
-            id: anchor.id,
-            txId: anchor.txId,
-            amount: anchor.amount,
-            currency: anchor.currency,
-            partner: anchor.partner,
-          },
-          cluster: {
-            key: clusterKey,
-            totalRecords: meta?.fullCount,
-            totalAmount: meta?.fullAmountSum,
-          },
-          context: {
-            uploadId,
-            detectedAt: new Date().toISOString(),
-          },
-        });
+        console.log(`Processing webhook: ${webhook.id}, URL: ${webhook.url}`);
+        console.log(`Webhook events: ${JSON.stringify(webhook.events)}`);
+        console.log(`Should deliver threat.created: ${webhook.events.includes("threat.created")}`);
+
+        if (webhook.events.includes("threat.created")) {
+          console.log("Queueing webhook for delivery...");
+          const queued = await queueWebhook(webhook.id, companyId, "threat.created", {
+            threat: {
+              id: (t as any).id,
+              type: t.threatType,
+              confidence: t.confidenceScore,
+              description: t.description,
+              ruleId,
+              severity: SEVERITY[severity],
+            },
+            record: {
+              id: anchor.id,
+              txId: anchor.txId,
+              amount: anchor.amount,
+              currency: anchor.currency,
+              partner: anchor.partner,
+            },
+            cluster: {
+              key: clusterKey,
+              totalRecords: meta?.fullCount,
+              totalAmount: meta?.fullAmountSum,
+            },
+            context: {
+              uploadId,
+              detectedAt: new Date().toISOString(),
+            },
+          });
+          console.log(`Webhook queued result: ${queued}`);
+        }
       }
     } catch (webhookError) {
       console.error("Webhook queueing failed:", webhookError);

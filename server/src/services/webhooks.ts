@@ -1,6 +1,8 @@
-// services/webhooks.ts - PRODUCTION READY WITH ENV AWARENESS
+// server/src/services/webhooks.ts
 import { prisma } from "../config/db";
 import { createHmac } from "crypto";
+import { WebhookError } from "../types/error";
+import { getRedis } from "../config/redis";
 
 export interface WebhookPayload {
   event: string;
@@ -101,6 +103,31 @@ export class WebhookService {
     return true;
   }
 
+  private rateLimitConfig = {
+    maxRequests: 100,
+    timeWindow: 60 * 1000, // 1 minute
+  };
+
+  private async checkRateLimit(webhookUrl: string): Promise<boolean> {
+    try {
+      // Get the Redis client
+      const redis = await getRedis();
+
+      const key = `rate_limit:${webhookUrl}`;
+      const current = await redis.incr(key);
+
+      if (current === 1) {
+        await redis.expire(key, this.rateLimitConfig.timeWindow / 1000);
+      }
+
+      return current <= this.rateLimitConfig.maxRequests;
+    } catch (error) {
+      // If Redis is unavailable, allow the request to proceed
+      console.error("Redis rate limiting failed, allowing request:", error);
+      return true;
+    }
+  }
+
   async deliverWebhook(
     webhook: any,
     payload: any,
@@ -109,6 +136,11 @@ export class WebhookService {
     const startTime = Date.now();
 
     try {
+      // Check rate limit
+      if (!(await this.checkRateLimit(webhook.url))) {
+        throw new WebhookError("Rate limit exceeded", "RATE_LIMIT_EXCEEDED", 429, true);
+      }
+
       // Check if we should deliver to this webhook based on environment
       if (!this.shouldDeliverToWebhook(webhook.url)) {
         console.log(
@@ -132,6 +164,9 @@ export class WebhookService {
         timestamp: new Date().toISOString(),
       };
 
+      // ✅ CRITICAL: Add this line to format the payload for the destination
+      const formattedPayload = this.formatPayloadForDestination(enhancedPayload, webhook.url);
+
       const response = await fetch(webhook.url, {
         method: "POST",
         headers: {
@@ -142,7 +177,8 @@ export class WebhookService {
           "User-Agent": "FraudDetectionWebhook/1.0",
           "X-Attempt": attempt.toString(),
         },
-        body: JSON.stringify(enhancedPayload),
+        // ✅ Change this line: use formattedPayload instead of enhancedPayload
+        body: JSON.stringify(formattedPayload),
         signal: controller.signal,
       });
 
@@ -189,6 +225,76 @@ export class WebhookService {
     if (error.statusCode === 429) return true;
 
     return false;
+  }
+
+  // Add this method to your WebhookService class
+  private formatPayloadForDestination(payload: any, webhookUrl: string): any {
+    // Format for Slack
+    if (webhookUrl.includes("hooks.slack.com")) {
+      const threatData = payload.data?.threat || {};
+      const recordData = payload.data?.record || {};
+
+      return {
+        text: `🚨 Fraud Detection Alert: ${threatData.type || "Unknown threat"} - ${
+          recordData.txId || "No TX ID"
+        }`,
+        blocks: [
+          {
+            type: "header",
+            text: {
+              type: "plain_text",
+              text: "🚨 Fraud Detection Alert",
+              emoji: true,
+            },
+          },
+          {
+            type: "section",
+            fields: [
+              {
+                type: "mrkdwn",
+                text: `*Type:*\n${threatData.type || "Unknown"}`,
+              },
+              {
+                type: "mrkdwn",
+                text: `*Confidence:*\n${
+                  threatData.confidence ? Math.round(threatData.confidence * 100) + "%" : "N/A"
+                }`,
+              },
+            ],
+          },
+          {
+            type: "section",
+            fields: [
+              {
+                type: "mrkdwn",
+                text: `*Transaction ID:*\n${recordData.txId || "N/A"}`,
+              },
+              {
+                type: "mrkdwn",
+                text: `*Amount:*\n${recordData.amount || "N/A"} ${recordData.currency || ""}`,
+              },
+            ],
+          },
+          {
+            type: "section",
+            text: {
+              type: "mrkdwn",
+              text: `*Description:*\n${threatData.description || "No description available"}`,
+            },
+          },
+          {
+            type: "context",
+            elements: [
+              {
+                type: "mrkdwn",
+                text: `Detected at: ${payload.timestamp || new Date().toISOString()}`,
+              },
+            ],
+          },
+        ],
+      };
+    }
+    return payload;
   }
 
   async deliverWithRetry(webhook: any, payload: any): Promise<void> {
@@ -279,7 +385,6 @@ export class WebhookService {
       return this.getActiveWebhooks(companyId);
     }
 
-    // Return mock webhooks for development with events
     const mockWebhooks = [
       {
         id: "dev-webhook-1",

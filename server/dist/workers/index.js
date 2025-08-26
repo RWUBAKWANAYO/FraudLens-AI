@@ -11,6 +11,7 @@ var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, P, ge
 Object.defineProperty(exports, "__esModule", { value: true });
 // server/src/workers/index.ts
 const embeddingWorker_1 = require("./embeddingWorker");
+const webhookQueue_1 = require("../queue/webhookQueue"); // Add this import
 const connectionManager_1 = require("../queue/connectionManager");
 (function main() {
     return __awaiter(this, void 0, void 0, function* () {
@@ -20,8 +21,12 @@ const connectionManager_1 = require("../queue/connectionManager");
         while (retryCount < MAX_RETRIES) {
             try {
                 yield (0, connectionManager_1.getChannel)();
-                yield Promise.all([(0, embeddingWorker_1.startEmbeddingWorker)()]);
-                console.log("Workers running: embeddings.generate, threat.explain");
+                // Start ALL workers including webhook consumer
+                yield Promise.all([
+                    (0, embeddingWorker_1.startEmbeddingWorker)(),
+                    (0, webhookQueue_1.startWebhookConsumer)(), // Add this line
+                ]);
+                console.log("Workers running: embeddings.generate, threat.explain, webhook.deliveries");
                 break;
             }
             catch (error) {

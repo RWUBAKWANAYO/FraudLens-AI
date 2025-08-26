@@ -46,6 +46,7 @@ exports.getChannel = getChannel;
 exports.closeConnections = closeConnections;
 exports.checkConnectionHealth = checkConnectionHealth;
 exports.gracefulShutdown = gracefulShutdown;
+// server/src/queue/connectionManager.ts
 const amqp = __importStar(require("amqplib"));
 let conn = null;
 let ch = null;
