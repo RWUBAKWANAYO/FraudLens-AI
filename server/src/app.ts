@@ -5,6 +5,7 @@ import { auditRouter } from "./routes/audit";
 import { authRouter } from "./routes/auth";
 import { usersRouter } from "./routes/users";
 import { webhookRouter } from "./routes/webhook";
+import { apiKeyRouter } from "./routes/apiKey";
 
 const app = express();
 
@@ -15,6 +16,7 @@ app.use("/api/v1/audit", auditRouter);
 app.use("/api/v1/auth", authRouter);
 app.use("/api/v1/users", usersRouter);
 app.use("/api/v1/webhooks", webhookRouter);
+app.use("/api/v1/api-keys", apiKeyRouter);
 
 app.use((_req, res) => {
   res.status(404).json({ error: "Route not found" });

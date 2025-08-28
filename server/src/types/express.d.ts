@@ -9,6 +9,7 @@ declare global {
         email: string;
         companyId: string;
         role: UserRole;
+        authMethod: "jwt" | "api_key";
       };
     }
   }

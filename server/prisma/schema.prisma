@@ -24,6 +24,7 @@ model Company {
   webhooks    WebhookSubscription[]
   users       User[]
   invitations Invitation[]
+  apiKeys     ApiKey[] // Added relation to ApiKey
 
   @@index([slug])
 }
@@ -47,6 +48,7 @@ model User {
   invitedById       String?
   invitedUsers      User[]       @relation("UserInvitations")
   sentInvitations   Invitation[]
+  createdApiKeys    ApiKey[] // Added relation to ApiKey
 
   @@index([companyId, email])
   @@index([verificationToken])
@@ -59,6 +61,7 @@ enum UserRole {
   MANAGER
   ANALYST
   MEMBER
+  API_CLIENT
 }
 
 model Invitation {
@@ -79,6 +82,28 @@ model Invitation {
   @@index([token])
   @@index([expiresAt])
   @@index([invitedById])
+}
+
+model ApiKey {
+  id         String    @id @default(uuid())
+  companyId  String
+  name       String
+  key        String    @unique
+  secret     String
+  enabled    Boolean   @default(true)
+  createdAt  DateTime  @default(now())
+  expiresAt  DateTime?
+  lastUsedAt DateTime?
+  createdBy  String // User ID who created the key
+
+  company Company @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  user    User?   @relation(fields: [createdBy], references: [id], onDelete: NoAction)
+
+  @@index([companyId])
+  @@index([key])
+  @@index([expiresAt])
+  @@index([enabled])
+  @@index([createdBy])
 }
 
 model Upload {

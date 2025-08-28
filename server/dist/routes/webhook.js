@@ -8,7 +8,7 @@ const webhookValidation_1 = require("../middleware/webhookValidation");
 const validation_1 = require("../middleware/validation");
 const router = (0, express_1.Router)();
 exports.webhookRouter = router;
-router.use(auth_1.authenticateToken);
+router.use(auth_1.authenticateTokenOrApiKey);
 router.post("/", webhookValidation_1.requireWebhookManagement, webhookValidation_1.webhookCreateValidation, validation_1.validateRequest, webhooks_1.createWebhook);
 router.get("/", webhookValidation_1.webhookListValidation, validation_1.validateRequest, webhooks_1.listWebhooks);
 router.put("/:webhookId", webhookValidation_1.webhookIdValidation, webhookValidation_1.webhookUpdateValidation, validation_1.validateRequest, webhookValidation_1.requireWebhookOwnership, webhookValidation_1.requireWebhookManagement, webhooks_1.updateWebhook);

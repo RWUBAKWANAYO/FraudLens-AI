@@ -1,6 +1,6 @@
 import { Router } from "express";
 import { createWebhook, listWebhooks, updateWebhook, deleteWebhook } from "../controllers/webhooks";
-import { authenticateToken } from "../middleware/auth";
+import { authenticateTokenOrApiKey } from "../middleware/auth";
 import {
   webhookCreateValidation,
   webhookUpdateValidation,
@@ -13,7 +13,7 @@ import { validateRequest } from "../middleware/validation";
 
 const router = Router();
 
-router.use(authenticateToken);
+router.use(authenticateTokenOrApiKey);
 router.post("/", requireWebhookManagement, webhookCreateValidation, validateRequest, createWebhook);
 router.get("/", webhookListValidation, validateRequest, listWebhooks);
 

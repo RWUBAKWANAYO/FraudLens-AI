@@ -1,16 +1,21 @@
 import { Router } from "express";
 import { UserController } from "../controllers/userController";
-import { authenticateToken, requireRole } from "../middleware/auth";
+import { authenticateTokenOrApiKey, requireRole } from "../middleware/auth";
 
 const router = Router();
 
-router.get("/", authenticateToken, UserController.getUsers);
+router.get("/", authenticateTokenOrApiKey, UserController.getUsers);
 router.patch(
   "/:userId/role",
-  authenticateToken,
+  authenticateTokenOrApiKey,
   requireRole(["ADMIN"]),
   UserController.updateUserRole
 );
-router.delete("/:userId", authenticateToken, requireRole(["ADMIN"]), UserController.removeUser);
+router.delete(
+  "/:userId",
+  authenticateTokenOrApiKey,
+  requireRole(["ADMIN"]),
+  UserController.removeUser
+);
 
 export { router as usersRouter };

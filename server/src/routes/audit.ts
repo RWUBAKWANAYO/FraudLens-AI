@@ -4,18 +4,17 @@ import { listAlerts } from "../controllers/alerts";
 import { multerConfig } from "../middleware/multer";
 import { getThreatDetails, listThreats } from "../controllers/threats";
 import { createRule, listRules, updateRule } from "../controllers/rules";
-import { authenticateToken } from "../middleware/auth";
+import { authenticateTokenOrApiKey, requireRole } from "../middleware/auth";
 
 export const router = Router();
 
-router.post("/upload", authenticateToken, multerConfig, handleFileUpload);
-router.get("/alerts", listAlerts);
+router.post("/upload", authenticateTokenOrApiKey, multerConfig, handleFileUpload);
+router.get("/alerts", authenticateTokenOrApiKey, listAlerts);
+router.get("/threats", authenticateTokenOrApiKey, listThreats);
+router.get("/threats/:threatId/analysis", authenticateTokenOrApiKey, getThreatDetails);
 
-router.get("/threats", listThreats);
-router.get("/threats/:threatId/analysis", getThreatDetails);
-
-router.post("/rules", createRule);
-router.get("/rules", listRules);
-router.patch("/rules", updateRule);
+router.post("/rules", authenticateTokenOrApiKey, requireRole(["ADMIN", "MANAGER"]), createRule);
+router.get("/rules", authenticateTokenOrApiKey, listRules);
+router.patch("/rules", authenticateTokenOrApiKey, requireRole(["ADMIN", "MANAGER"]), updateRule);
 
 export { router as auditRouter };

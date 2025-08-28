@@ -8,7 +8,7 @@ import {
   forgotPasswordValidation,
   resetPasswordValidation,
 } from "../middleware/validation";
-import { authenticateToken, requireRole } from "../middleware/auth";
+import { authenticateTokenOrApiKey, requireRole } from "../middleware/auth";
 
 const router = Router();
 
@@ -17,14 +17,13 @@ router.get("/verify-email", AuthController.verifyEmail);
 router.post("/login", loginValidation, validateRequest, AuthController.login);
 router.post(
   "/invite",
-  authenticateToken,
+  authenticateTokenOrApiKey,
   requireRole(["ADMIN", "MANAGER"]),
   inviteUserValidation,
   validateRequest,
   AuthController.inviteUser
 );
 router.post("/accept-invitation", AuthController.acceptInvitation);
-
 router.post(
   "/forgot-password",
   forgotPasswordValidation,
@@ -37,7 +36,6 @@ router.post(
   validateRequest,
   AuthController.resetPassword
 );
-
-router.get("/me", authenticateToken, AuthController.getCurrentUser);
+router.get("/me", authenticateTokenOrApiKey, AuthController.getCurrentUser);
 
 export { router as authRouter };
