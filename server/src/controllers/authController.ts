@@ -1,4 +1,3 @@
-// server/src/controllers/authController.ts
 import { Request, Response } from "express";
 import { AuthService } from "../services/authService";
 import { AuthUtils } from "../utils/auth";

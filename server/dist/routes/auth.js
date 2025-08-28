@@ -1,7 +1,6 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.authRouter = void 0;
-// server/src/routes/auth.ts
 const express_1 = require("express");
 const authController_1 = require("../controllers/authController");
 const validation_1 = require("../middleware/validation");

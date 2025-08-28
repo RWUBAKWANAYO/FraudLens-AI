@@ -73,7 +73,6 @@ function getEmbeddingsBatch(texts) {
         if (!texts.length)
             return [];
         if (USE_LOCAL_AI) {
-            // try a local batch endpoint if available
             try {
                 const res = yield (0, node_fetch_1.default)(`${LOCAL_AI_URL}/embed/batch`, {
                     method: "POST",
@@ -85,12 +84,10 @@ function getEmbeddingsBatch(texts) {
                     if (Array.isArray(data.embeddings))
                         return data.embeddings;
                 }
-                // fallthrough to per-item if batch not supported
             }
             catch (_a) {
-                // ignore and fall back
+                console.log("Local AI fail");
             }
-            // Per-item with a small concurrency
             return pPool(texts, 6, (t) => getEmbedding(t));
         }
         else {

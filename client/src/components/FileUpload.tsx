@@ -33,7 +33,7 @@ export default function FileUpload({ companyId }: { companyId: string }) {
         body: formData,
         headers: {
           Authorization:
-            "Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VySWQiOiI4Yzg0MmE2Ny02OWFjLTQzNDQtYmEzYS01ODg4MzBhZmVhZGUiLCJlbWFpbCI6Imh1bWJsZW5heW9AZ21haWwuY29tIiwiY29tcGFueUlkIjoiM2ZmOGI4M2MtMzlmYS00ZGYyLWI0NTEtZDMzOGNkYjBmYTJkIiwicm9sZSI6IkFETUlOIiwiaWF0IjoxNzU2MjM2NzI5LCJleHAiOjE3NTY4NDE1Mjl9.X2OI1hrgOW8hK18sG9hxmbNGToshZNRr0OzLofQ7hAs",
+            "Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VySWQiOiJhZGRmYmVjNi02ZDBmLTRhMjAtYWIwMy0xNDBmOGRlMjBhOGMiLCJlbWFpbCI6Imh1bWJsZW5heW9AZ21haWwuY29tIiwiY29tcGFueUlkIjoiMDRlNzVmODAtYTJkOS00MThkLTkyZTktMDU3ZWVjM2I3NmIxIiwicm9sZSI6IkFETUlOIiwiaWF0IjoxNzU2NDA1NzEyLCJleHAiOjE3NTcwMTA1MTJ9.ll0psBErmkcPLbRo4Tl-3VPlezWV-ZNlDUtqBjAg6kU",
         },
       });
 

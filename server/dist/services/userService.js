@@ -38,14 +38,12 @@ class UserService {
     }
     static updateUserRole(companyId, userId, role, updaterId) {
         return __awaiter(this, void 0, void 0, function* () {
-            // Check if updater has permission
             const updater = yield db_1.prisma.user.findUnique({
                 where: { id: updaterId },
             });
             if (!updater || updater.companyId !== companyId) {
                 throw new Error("Unauthorized");
             }
-            // Cannot demote yourself from ADMIN if you're the only admin
             if (userId === updaterId && role !== "ADMIN") {
                 const adminCount = yield db_1.prisma.user.count({
                     where: {
@@ -66,7 +64,6 @@ class UserService {
     }
     static removeUser(companyId, userId, removerId) {
         return __awaiter(this, void 0, void 0, function* () {
-            // Cannot remove yourself
             if (userId === removerId) {
                 throw new Error("Cannot remove yourself");
             }
@@ -76,7 +73,6 @@ class UserService {
             if (!userToRemove) {
                 throw new Error("User not found");
             }
-            // Cannot remove the last admin
             if (userToRemove.role === "ADMIN") {
                 const adminCount = yield db_1.prisma.user.count({
                     where: {

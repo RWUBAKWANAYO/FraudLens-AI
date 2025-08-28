@@ -1,7 +1,6 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.webhookRouter = void 0;
-// server/src/routes/webhook.ts
 const express_1 = require("express");
 const webhooks_1 = require("../controllers/webhooks");
 const auth_1 = require("../middleware/auth");

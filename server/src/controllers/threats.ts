@@ -1,4 +1,3 @@
-// server/src/controllers/threats.ts
 import { Request, Response } from "express";
 import { prisma } from "../config/db";
 import { generateDetailedExplanation } from "../services/leakExplanation";
@@ -32,7 +31,6 @@ export async function getThreatDetails(req: Request, res: Response) {
       return res.status(404).json({ error: "Threat not found" });
     }
 
-    // Check if we already have an AI explanation
     const metadata = threat.metadata as any;
     if (metadata?.aiExplanation) {
       return res.json({
@@ -49,7 +47,6 @@ export async function getThreatDetails(req: Request, res: Response) {
       });
     }
 
-    // Use stored context or build basic context from threat data
     const context = metadata?.aiContext || {
       threatType: threat.threatType,
       amount: threat.record?.amount,
@@ -58,10 +55,8 @@ export async function getThreatDetails(req: Request, res: Response) {
       additionalContext: metadata?.context,
     };
 
-    // Generate AI explanation ON-DEMAND (only when user requests)
     const detailedExplanation = await generateDetailedExplanation(context);
 
-    // Save the AI explanation to prevent regeneration
     const updatedThreat = await prisma.threat.update({
       where: { id: threatId },
       data: {
@@ -69,7 +64,7 @@ export async function getThreatDetails(req: Request, res: Response) {
           ...metadata,
           aiExplanation: detailedExplanation,
           aiGeneratedAt: new Date().toISOString(),
-          aiExplanationGenerated: true, // Mark as processed
+          aiExplanationGenerated: true,
         },
       },
       include: { record: true },

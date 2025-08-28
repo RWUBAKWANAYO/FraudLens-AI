@@ -15,7 +15,6 @@ export default function RealTimeAlerts({ companyId }: { companyId: string }) {
   const { completedUploads } = useUploads();
 
   useEffect(() => {
-    // Load initial alerts
     fetch(`${process.env.NEXT_PUBLIC_SERVER_URL}/audit/alerts?companyId=${companyId}`)
       .then((res) => res.json())
       .then((data) => {
@@ -24,7 +23,6 @@ export default function RealTimeAlerts({ companyId }: { companyId: string }) {
       .catch((err) => console.error("Failed to load alerts:", err));
   }, [companyId]);
 
-  // Add alerts from completed uploads
   useEffect(() => {
     const newAlerts: Alert[] = [];
     completedUploads.forEach((upload) => {

@@ -1,4 +1,3 @@
-// server/src/middleware/webhookValidation.ts
 import { Request, Response, NextFunction } from "express";
 import { body, query, param } from "express-validator";
 import { prisma } from "../config/db";
@@ -8,7 +7,6 @@ export const webhookCreateValidation = [
     .isURL()
     .withMessage("Valid URL is required")
     .custom((url) => {
-      // Prevent internal URLs in production
       if (process.env.NODE_ENV === "production") {
         const parsedUrl = new URL(url);
         if (["localhost", "127.0.0.1", "0.0.0.0"].includes(parsedUrl.hostname)) {
@@ -62,7 +60,6 @@ export const webhookIdValidation = [
   param("webhookId").isUUID().withMessage("Valid webhook ID is required"),
 ];
 
-// Middleware to check if user owns the webhook
 export const requireWebhookOwnership = async (req: Request, res: Response, next: NextFunction) => {
   try {
     const { webhookId } = req.params;
@@ -95,7 +92,6 @@ export const requireWebhookOwnership = async (req: Request, res: Response, next:
   }
 };
 
-// Middleware to check if user can manage webhooks (ADMIN or MANAGER)
 export const requireWebhookManagement = (req: Request, res: Response, next: NextFunction) => {
   if (!req.user) {
     return res.status(401).json({ error: "Authentication required" });

@@ -55,7 +55,6 @@ export async function getEmbeddingsBatch(texts: string[]): Promise<number[][]> {
   if (!texts.length) return [];
 
   if (USE_LOCAL_AI) {
-    // try a local batch endpoint if available
     try {
       const res = await fetch(`${LOCAL_AI_URL}/embed/batch`, {
         method: "POST",
@@ -66,11 +65,9 @@ export async function getEmbeddingsBatch(texts: string[]): Promise<number[][]> {
         const data = await res.json();
         if (Array.isArray(data.embeddings)) return data.embeddings;
       }
-      // fallthrough to per-item if batch not supported
     } catch {
-      // ignore and fall back
+      console.log("Local AI fail");
     }
-    // Per-item with a small concurrency
     return pPool(texts, 6, (t) => getEmbedding(t));
   } else {
     const response = await client.embeddings.create({

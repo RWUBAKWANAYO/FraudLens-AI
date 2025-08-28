@@ -1,4 +1,3 @@
-// server/src/routes/webhook.ts
 import { Router } from "express";
 import { createWebhook, listWebhooks, updateWebhook, deleteWebhook } from "../controllers/webhooks";
 import { authenticateToken } from "../middleware/auth";

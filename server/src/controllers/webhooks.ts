@@ -1,4 +1,3 @@
-// server/src/controllers/webhooks.ts
 import { NextFunction, Request, Response } from "express";
 import { prisma } from "../config/db";
 
@@ -9,7 +8,6 @@ export const createWebhook = async (req: Request, res: Response, next: NextFunct
     const { url, events, secret } = req.body;
     const companyId = req.user?.companyId;
 
-    // This should never happen due to middleware, but just in case
     if (!companyId) {
       return res.status(401).json({ error: "Invalid authorization" });
     }
@@ -37,7 +35,6 @@ export async function listWebhooks(req: Request, res: Response) {
     const { companyId } = req.query;
     const userCompanyId = req.user?.companyId;
 
-    // Verify user is requesting their own company's webhooks
     if (companyId !== userCompanyId) {
       return res.status(403).json({
         error: "Access denied",
@@ -55,7 +52,6 @@ export async function listWebhooks(req: Request, res: Response) {
       },
     });
 
-    // Parse events from JSON if needed
     const webhooksWithParsedEvents = webhooks.map((webhook) => ({
       ...webhook,
       events: Array.isArray(webhook.events) ? webhook.events : JSON.parse(webhook.events as string),
@@ -80,7 +76,6 @@ export async function updateWebhook(req: Request, res: Response) {
     if (typeof active === "boolean") updateData.active = active;
 
     if (events) {
-      // Format events as JSON array
       const validEvents = Array.isArray(events)
         ? events.filter((event) => typeof event === "string")
         : ["threat.created"];
@@ -92,7 +87,6 @@ export async function updateWebhook(req: Request, res: Response) {
       data: updateData,
     });
 
-    // Parse events for response
     const responseWebhook = {
       ...webhook,
       events: Array.isArray(webhook.events) ? webhook.events : JSON.parse(webhook.events as string),

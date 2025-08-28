@@ -1,6 +1,6 @@
-// server/src/services/aiExplanation.ts
 import OpenAI from "openai";
 import fetch from "node-fetch";
+import { ThreatContext } from "../types/leakTypes";
 
 const USE_LOCAL_AI = process.env.USE_LOCAL_AI === "true";
 const LOCAL_AI_URL = process.env.LOCAL_AI_URL;
@@ -11,16 +11,6 @@ const openaiClient = USE_LOCAL_AI
       apiKey: process.env.OPENAI_API_KEY,
     });
 
-export type ThreatContext = {
-  threatType: string;
-  amount: number | null;
-  partner: string | null;
-  txId: string | null;
-  datasetStats?: { mean: number; max: number; totalRecords: number };
-  additionalContext?: any;
-};
-
-// Static explanation templates - no AI calls
 export function generateStaticExplanation(context: ThreatContext): string {
   const { threatType, additionalContext: a = {} } = context;
 
@@ -55,7 +45,6 @@ export function generateStaticExplanation(context: ThreatContext): string {
   return (templates[threatType as keyof typeof templates] || templates.default)();
 }
 
-// AI explanation ONLY for on-demand detailed view
 export async function generateDetailedExplanation(context: ThreatContext): Promise<string> {
   try {
     const evidence = buildEvidenceMessage(context);
@@ -65,11 +54,10 @@ export async function generateDetailedExplanation(context: ThreatContext): Promi
     return `${evidence}\n\n${aiText}`;
   } catch (error) {
     console.error("AI detailed explanation failed:", error);
-    return generateStaticExplanation(context); // Fallback to static
+    return generateStaticExplanation(context);
   }
 }
 
-// Helper functions (keep these private)
 function buildEvidenceMessage(ctx: ThreatContext): string {
   const { threatType, additionalContext: a = {} } = ctx;
   const money = (v: any, cur?: string) =>
@@ -92,7 +80,7 @@ function buildEvidenceMessage(ctx: ThreatContext): string {
   }
 }
 
-function buildOpenAIPrompt(context: ThreatContext, evidence: string): string {
+function buildOpenAIPrompt(_context: ThreatContext, evidence: string): string {
   return `As a financial risk analyst, provide a comprehensive 3-4 sentence analysis:
 
 EVIDENCE: ${evidence}

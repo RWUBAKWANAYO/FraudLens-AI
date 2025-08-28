@@ -1,7 +1,4 @@
 "use strict";
-// =============================================
-// server/src/queue/connectionManager.ts
-// =============================================
 // @ts-nocheck
 var __createBinding = (this && this.__createBinding) || (Object.create ? (function(o, m, k, k2) {
     if (k2 === undefined) k2 = k;
@@ -61,7 +58,6 @@ let reconnectAttempts = 0;
 const MAX_RECONNECT_ATTEMPTS = Number(process.env.RABBIT_MAX_RECONNECT || 10);
 const BASE_RECONNECT_DELAY = Number(process.env.RABBIT_RECONNECT_BASE_MS || 1000);
 let isShuttingDown = false;
-// Connection state
 let connectionState = "disconnected";
 function getConnection() {
     return __awaiter(this, void 0, void 0, function* () {
@@ -93,7 +89,6 @@ function establishConnection() {
                 throw new Error("RABBIT_URL is not set");
             const conn = yield amqp.connect(url);
             conn.on("error", (err) => {
-                // amqplib emits 'error' on connection; log and trigger reconnection
                 console.error("RabbitMQ connection error:", err && err.message);
                 connectionState = "disconnected";
                 scheduleReconnect();
@@ -148,7 +143,6 @@ function getChannel() {
             }
             const conn = yield getConnection();
             publisherChannel = yield conn.createChannel();
-            // publisher channel error/close handlers: close and allow recreation
             publisherChannel.on("error", (err) => {
                 console.error("Publisher channel error:", (err && err.message) || err);
                 try {
@@ -170,13 +164,8 @@ function getChannel() {
         }
     });
 }
-/**
- * Create (and return) a fresh consumer channel for a single consumer.
- * Consumer channel should be used exclusively by that consumer.
- */
 function createConsumerChannel(consumerId_1) {
     return __awaiter(this, arguments, void 0, function* (consumerId, prefetch = Number(process.env.WORKER_PREFETCH || 8)) {
-        // If we already have one for this id and it's open, return it
         const existing = consumerChannels.get(consumerId);
         if (existing && existing.connection) {
             return existing;
@@ -197,15 +186,11 @@ function createConsumerChannel(consumerId_1) {
         return ch;
     });
 }
-/**
- * Health check for current connection & channels.
- */
 function checkConnectionHealth() {
     return __awaiter(this, void 0, void 0, function* () {
         try {
             if (!connection || connectionState !== "connected")
                 return false;
-            // Try a lightweight operation: create a temporary channel, assert/delete a temporary queue
             const ch = yield connection.createChannel();
             try {
                 const q = `health_check_${Date.now()}_${Math.floor(Math.random() * 1000)}`;
@@ -233,7 +218,6 @@ function checkConnectionHealth() {
 function closeConnections() {
     return __awaiter(this, void 0, void 0, function* () {
         isShuttingDown = true;
-        // Close consumer channels
         yield Promise.allSettled(Array.from(consumerChannels.values()).map((ch) => __awaiter(this, void 0, void 0, function* () {
             if (ch && ch.close) {
                 try {
@@ -245,7 +229,6 @@ function closeConnections() {
             }
         })));
         consumerChannels.clear();
-        // Close publisher channel
         if (publisherChannel) {
             try {
                 yield publisherChannel.close();

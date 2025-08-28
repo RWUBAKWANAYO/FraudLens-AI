@@ -1,6 +1,3 @@
-// =============================================
-// server/src/queue/bus.ts
-// =============================================
 import * as amqp from "amqplib";
 import { getChannel, createConsumerChannel, closeConnections } from "./connectionManager";
 
@@ -11,7 +8,6 @@ export async function publish(queue: string, msg: any, retryCount = 0): Promise<
   try {
     const channel = await getChannel();
 
-    // Ensure queue exists (idempotent)
     await channel.assertQueue(queue, { durable: true });
 
     const ok = channel.sendToQueue(queue, Buffer.from(JSON.stringify(msg)), {
@@ -20,7 +16,6 @@ export async function publish(queue: string, msg: any, retryCount = 0): Promise<
     });
 
     if (!ok) {
-      // flow control: message buffered by server; treat as temporary failure and retry
       throw new Error("Message not queued (flow control)");
     }
 
@@ -30,8 +25,6 @@ export async function publish(queue: string, msg: any, retryCount = 0): Promise<
       `Failed to publish to ${queue} (attempt ${retryCount + 1}):`,
       error && (error as Error).message
     );
-
-    // If channel/connection closed, try to recreate and retry
     if (retryCount < MAX_PUBLISH_RETRIES) {
       const delay = PUBLISH_RETRY_BASE_MS * Math.pow(2, retryCount);
       await new Promise((r) => setTimeout(r, delay));
@@ -42,11 +35,6 @@ export async function publish(queue: string, msg: any, retryCount = 0): Promise<
   }
 }
 
-/**
- * Consume helper that gives each consumer its own channel.
- * The handler receives (payload, channel, msg) so it can do manual ack/nack if needed,
- * but the function below will ack on success and nack on handler throw by default.
- */
 export async function consume(
   queue: string,
   handler: (payload: any, channel: amqp.Channel, msg: amqp.Message) => Promise<void>,
@@ -83,21 +71,18 @@ export async function consume(
 
           try {
             await handler(payload, ch, msg);
-            // centralised ack on success
             safeAck(ch, msg);
           } catch (err) {
             console.error(
               `Error processing message from ${queue}:`,
               (err && (err as Error).message) || err
             );
-            // NACK - decide whether to requeue
             safeNack(ch, msg, requeueOnError);
           }
         },
         { noAck: false }
       );
 
-      // when channel closes unexpectedly restart consumer
       ch.on("close", () => {
         console.warn(`Consumer channel ${consumerId} closed; restarting in 2s`);
         setTimeout(start, 2000);
@@ -148,7 +133,6 @@ function safeNack(channel: amqp.Channel, msg: amqp.Message, requeue = false) {
   }
 }
 
-// Graceful shutdown handlers
 process.on("SIGTERM", async () => {
   console.log("SIGTERM received, closing RabbitMQ connections");
   await closeConnections();

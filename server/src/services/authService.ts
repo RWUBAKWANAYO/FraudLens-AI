@@ -1,4 +1,3 @@
-// server/src/services/authService.ts
 import { prisma } from "../config/db";
 import { AuthUtils } from "../utils/auth";
 import { EmailService } from "../utils/email";
@@ -11,7 +10,6 @@ import {
 
 export class AuthService {
   static async registerUser(data: RegisterRequest) {
-    // Check if company slug already exists
     const existingCompany = await prisma.company.findUnique({
       where: { slug: data.companySlug },
     });
@@ -20,7 +18,6 @@ export class AuthService {
       throw new Error("Company slug already exists");
     }
 
-    // Check if email already exists
     const existingUser = await prisma.user.findUnique({
       where: { email: data.email },
     });
@@ -29,7 +26,6 @@ export class AuthService {
       throw new Error("Email already registered");
     }
 
-    // Create company and user in transaction (without email)
     const result = await prisma.$transaction(async (tx) => {
       const company = await tx.company.create({
         data: {
@@ -38,12 +34,10 @@ export class AuthService {
         },
       });
 
-      // Hash the password with proper error handling
       let hashedPassword: string;
       try {
         hashedPassword = await AuthUtils.hashPassword(data.password);
       } catch (error) {
-        console.error("Password hashing failed:", error);
         throw new Error("Failed to process password");
       }
 
@@ -63,13 +57,9 @@ export class AuthService {
       return { user, company, verificationToken };
     });
 
-    // Send verification email OUTSIDE the transaction
     try {
       await EmailService.sendVerificationEmail(data.email, result.verificationToken, data.fullName);
-    } catch (emailError) {
-      console.error("Failed to send verification email:", emailError);
-      // Don't throw error here - user is already created, just log it
-    }
+    } catch (emailError) {}
 
     return result;
   }
@@ -104,7 +94,6 @@ export class AuthService {
       throw new Error("Inviter not found");
     }
 
-    // Check if user already exists
     const existingUser = await prisma.user.findUnique({
       where: { email: data.email },
     });
@@ -113,7 +102,6 @@ export class AuthService {
       throw new Error("User already exists");
     }
 
-    // Check if invitation already exists
     const existingInvitation = await prisma.invitation.findFirst({
       where: {
         email: data.email,
@@ -128,9 +116,8 @@ export class AuthService {
     }
 
     const token = AuthUtils.generateRandomToken();
-    const expiresAt = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000); // 7 days
+    const expiresAt = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000);
 
-    // Create invitation in transaction
     const invitation = await prisma.$transaction(async (tx) => {
       return await tx.invitation.create({
         data: {
@@ -144,7 +131,6 @@ export class AuthService {
       });
     });
 
-    // Send invitation email OUTSIDE the transaction
     try {
       await EmailService.sendInvitationEmail(
         data.email,
@@ -152,10 +138,7 @@ export class AuthService {
         inviter.fullName,
         inviter.company.name
       );
-    } catch (emailError) {
-      console.error("Failed to send invitation email:", emailError);
-      // Don't throw error here - invitation is already created
-    }
+    } catch (emailError) {}
 
     return invitation;
   }
@@ -181,7 +164,7 @@ export class AuthService {
         data: {
           email: invitation.email,
           password: hashedPassword,
-          fullName: invitation.email.split("@")[0], // Default name
+          fullName: invitation.email.split("@")[0],
           companyId: invitation.companyId,
           role: invitation.role,
           isVerified: true,
@@ -197,19 +180,18 @@ export class AuthService {
       return user;
     });
   }
+
   static async forgotPassword(data: ForgotPasswordRequest) {
     const user = await prisma.user.findUnique({
       where: { email: data.email },
     });
 
     if (!user) {
-      // Don't reveal that the email doesn't exist for security
       return { message: "If the email exists, a password reset link has been sent" };
     }
 
-    // Generate reset token
     const resetToken = AuthUtils.generateRandomToken();
-    const resetTokenExpiry = new Date(Date.now() + 1 * 60 * 60 * 1000); // 1 hour
+    const resetTokenExpiry = new Date(Date.now() + 3600000);
 
     await prisma.user.update({
       where: { id: user.id },
@@ -219,13 +201,9 @@ export class AuthService {
       },
     });
 
-    // Send password reset email
     try {
       await EmailService.sendPasswordResetEmail(user.email, resetToken, user.fullName);
-    } catch (emailError) {
-      console.error("Failed to send password reset email:", emailError);
-      // Don't throw error - the reset token is still created
-    }
+    } catch (emailError) {}
 
     return { message: "If the email exists, a password reset link has been sent" };
   }

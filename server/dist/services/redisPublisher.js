@@ -10,7 +10,6 @@ var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, P, ge
 };
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.redisPublisher = exports.RedisPublisher = void 0;
-// server/src/services/redisPublisher.ts
 const redis_1 = require("../config/redis");
 class RedisPublisher {
     static getInstance() {
@@ -64,7 +63,6 @@ class RedisPublisher {
             return this.publish("threat_updates", { companyId, event });
         });
     }
-    // NEW: Enhanced status publishing with detailed progress
     publishUploadProgress(companyId, uploadId, progress, stage, message, details) {
         return __awaiter(this, void 0, void 0, function* () {
             return this.publishStatus(companyId, {

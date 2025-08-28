@@ -1,4 +1,3 @@
-// server/src/services/userService.ts
 import { UserRole } from "@prisma/client";
 import { prisma } from "../config/db";
 
@@ -27,7 +26,6 @@ export class UserService {
   }
 
   static async updateUserRole(companyId: string, userId: string, role: string, updaterId: string) {
-    // Check if updater has permission
     const updater = await prisma.user.findUnique({
       where: { id: updaterId },
     });
@@ -36,7 +34,6 @@ export class UserService {
       throw new Error("Unauthorized");
     }
 
-    // Cannot demote yourself from ADMIN if you're the only admin
     if (userId === updaterId && role !== "ADMIN") {
       const adminCount = await prisma.user.count({
         where: {
@@ -58,7 +55,6 @@ export class UserService {
   }
 
   static async removeUser(companyId: string, userId: string, removerId: string) {
-    // Cannot remove yourself
     if (userId === removerId) {
       throw new Error("Cannot remove yourself");
     }
@@ -71,7 +67,6 @@ export class UserService {
       throw new Error("User not found");
     }
 
-    // Cannot remove the last admin
     if (userToRemove.role === "ADMIN") {
       const adminCount = await prisma.user.count({
         where: {

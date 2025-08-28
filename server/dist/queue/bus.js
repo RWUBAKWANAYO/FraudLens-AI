@@ -18,21 +18,18 @@ function publish(queue_1, msg_1) {
     return __awaiter(this, arguments, void 0, function* (queue, msg, retryCount = 0) {
         try {
             const channel = yield (0, connectionManager_1.getChannel)();
-            // Ensure queue exists (idempotent)
             yield channel.assertQueue(queue, { durable: true });
             const ok = channel.sendToQueue(queue, Buffer.from(JSON.stringify(msg)), {
                 persistent: true,
                 contentType: "application/json",
             });
             if (!ok) {
-                // flow control: message buffered by server; treat as temporary failure and retry
                 throw new Error("Message not queued (flow control)");
             }
             return true;
         }
         catch (error) {
             console.error(`Failed to publish to ${queue} (attempt ${retryCount + 1}):`, error && error.message);
-            // If channel/connection closed, try to recreate and retry
             if (retryCount < MAX_PUBLISH_RETRIES) {
                 const delay = PUBLISH_RETRY_BASE_MS * Math.pow(2, retryCount);
                 yield new Promise((r) => setTimeout(r, delay));
@@ -42,11 +39,6 @@ function publish(queue_1, msg_1) {
         }
     });
 }
-/**
- * Consume helper that gives each consumer its own channel.
- * The handler receives (payload, channel, msg) so it can do manual ack/nack if needed,
- * but the function below will ack on success and nack on handler throw by default.
- */
 function consume(queue_1, handler_1) {
     return __awaiter(this, arguments, void 0, function* (queue, handler, opts = {}) {
         const consumerId = opts.consumerId || `${queue}-${Math.floor(Math.random() * 10000)}`;
@@ -72,16 +64,13 @@ function consume(queue_1, handler_1) {
                         }
                         try {
                             yield handler(payload, ch, msg);
-                            // centralised ack on success
                             safeAck(ch, msg);
                         }
                         catch (err) {
                             console.error(`Error processing message from ${queue}:`, (err && err.message) || err);
-                            // NACK - decide whether to requeue
                             safeNack(ch, msg, requeueOnError);
                         }
                     }), { noAck: false });
-                    // when channel closes unexpectedly restart consumer
                     ch.on("close", () => {
                         console.warn(`Consumer channel ${consumerId} closed; restarting in 2s`);
                         setTimeout(start, 2000);
@@ -125,7 +114,6 @@ function safeNack(channel, msg, requeue = false) {
         console.warn("Failed to nack message (channel may be closed):", (err && err.message) || err);
     }
 }
-// Graceful shutdown handlers
 process.on("SIGTERM", () => __awaiter(void 0, void 0, void 0, function* () {
     console.log("SIGTERM received, closing RabbitMQ connections");
     yield (0, connectionManager_1.closeConnections)();

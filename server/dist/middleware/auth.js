@@ -23,7 +23,6 @@ const authenticateToken = (req, res, next) => __awaiter(void 0, void 0, void 0, 
             return res.status(401).json({ error: "Invalid authorization format. Use: Bearer <token>" });
         }
         const payload = auth_1.AuthUtils.verifyToken(token);
-        // Verify user still exists and is active
         const user = yield db_1.prisma.user.findUnique({
             where: { id: payload.userId },
             select: {
@@ -40,7 +39,6 @@ const authenticateToken = (req, res, next) => __awaiter(void 0, void 0, void 0, 
         if (!user.isVerified) {
             return res.status(401).json({ error: "Please verify your email before logging in" });
         }
-        // Add user to request object
         req.user = {
             id: user.id,
             email: user.email,

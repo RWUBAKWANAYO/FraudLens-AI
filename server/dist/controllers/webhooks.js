@@ -23,7 +23,6 @@ const createWebhook = (req, res, next) => __awaiter(void 0, void 0, void 0, func
     try {
         const { url, events, secret } = req.body;
         const companyId = (_a = req.user) === null || _a === void 0 ? void 0 : _a.companyId;
-        // This should never happen due to middleware, but just in case
         if (!companyId) {
             return res.status(401).json({ error: "Invalid authorization" });
         }
@@ -48,7 +47,6 @@ function listWebhooks(req, res) {
         try {
             const { companyId } = req.query;
             const userCompanyId = (_a = req.user) === null || _a === void 0 ? void 0 : _a.companyId;
-            // Verify user is requesting their own company's webhooks
             if (companyId !== userCompanyId) {
                 return res.status(403).json({
                     error: "Access denied",
@@ -64,7 +62,6 @@ function listWebhooks(req, res) {
                     },
                 },
             });
-            // Parse events from JSON if needed
             const webhooksWithParsedEvents = webhooks.map((webhook) => (Object.assign(Object.assign({}, webhook), { events: Array.isArray(webhook.events) ? webhook.events : JSON.parse(webhook.events) })));
             res.json(webhooksWithParsedEvents);
         }
@@ -87,7 +84,6 @@ function updateWebhook(req, res) {
             if (typeof active === "boolean")
                 updateData.active = active;
             if (events) {
-                // Format events as JSON array
                 const validEvents = Array.isArray(events)
                     ? events.filter((event) => typeof event === "string")
                     : ["threat.created"];
@@ -97,7 +93,6 @@ function updateWebhook(req, res) {
                 where: { id: webhookId },
                 data: updateData,
             });
-            // Parse events for response
             const responseWebhook = Object.assign(Object.assign({}, webhook), { events: Array.isArray(webhook.events) ? webhook.events : JSON.parse(webhook.events) });
             res.json(responseWebhook);
         }

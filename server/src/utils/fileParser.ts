@@ -1,31 +1,8 @@
 import csvParser from "csv-parser";
 import * as XLSX from "xlsx";
-import pdfParse from "pdf-parse";
-import Tesseract from "tesseract.js";
-import { normalizeAmount, normalizeDate } from "../utils/normalizeData";
+import { normalizeAmount, normalizeDate } from "./normalizeData";
+import { Parsed } from "../types/fileParser";
 
-type Parsed = {
-  txId?: string;
-  partner?: string;
-  amount?: number;
-  date?: string;
-  email?: string;
-  currency?: string;
-  description?: string;
-  status?: string;
-  // NEW-ish: capture identity/instrument hints when present
-  user_id?: string;
-  account?: string;
-  card?: string;
-  bank_account?: string;
-  account_number?: string;
-  ip?: string;
-  device?: string;
-  raw?: any;
-  embeddingJson?: number[] | null;
-};
-
-// CSV
 export async function parseCSVBuffer(buffer: Buffer): Promise<Parsed[]> {
   const rows: Parsed[] = [];
   return new Promise((resolve, reject) => {
@@ -118,7 +95,6 @@ export async function parseCSVBuffer(buffer: Buffer): Promise<Parsed[]> {
   });
 }
 
-// Excel stays similar but adds identity/instrument extraction
 export async function parseExcelBuffer(buffer: Buffer): Promise<Parsed[]> {
   const workbook = XLSX.read(buffer, { type: "buffer" });
   const sheet = workbook.Sheets[workbook.SheetNames[0]];
@@ -157,7 +133,6 @@ export async function parseExcelBuffer(buffer: Buffer): Promise<Parsed[]> {
   });
 }
 
-// PDF unchanged except for types; keep as-is if you don’t rely on PDFs for v1.
 export async function parsePDFBuffer(buffer: Buffer): Promise<Parsed[]> {
   const rows: any[] = [];
   try {
@@ -182,26 +157,20 @@ export async function parsePDFBuffer(buffer: Buffer): Promise<Parsed[]> {
     for (const line of lines) {
       const record: Parsed = { raw: line, embeddingJson: null };
 
-      // Attempt to detect txId anywhere
       const txMatch = line.match(txIdRegex);
       if (txMatch) record.txId = txMatch[0].substring(0, 50);
 
-      // Attempt to detect amount anywhere
       const nums = line.match(numberRegex);
       if (nums && nums.length > 0) {
-        // Heuristic: pick the last number in the line as amount
         const amt = normalizeAmount(nums[nums.length - 1]);
         if (amt !== null) record.amount = amt;
       }
 
-      // Simple partner extraction: letters before first number
       const partnerMatch = line.match(/([A-Za-z\s]+)\d/);
       if (partnerMatch) record.partner = partnerMatch[1].trim();
 
-      // Add line as description if nothing else
       if (!record.description) record.description = line;
 
-      // Only keep record if we have txId or amount
       if (record.txId || record.amount) rows.push(record);
     }
   } catch (err) {

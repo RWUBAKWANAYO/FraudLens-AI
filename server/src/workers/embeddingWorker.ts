@@ -1,6 +1,3 @@
-// =============================================
-// server/src/workers/embeddingWorker.ts
-// =============================================
 import { consume } from "../queue/bus";
 import { prisma } from "../config/db";
 import { getEmbeddingsBatch } from "../services/aiEmbedding";
@@ -11,40 +8,29 @@ import { checkConnectionHealth } from "../queue/connectionManager";
 import { ErrorHandler } from "../utils/errorHandler";
 import type * as amqp from "amqplib";
 import { acquireLock, releaseLock } from "../config/redis";
+import { createBatches, calculateProgress } from "../utils/embeddingWorkerUtils";
 
 const CONCURRENCY = Number(process.env.WORKER_CONCURRENCY || 8);
 const EMBED_BATCH = Number(process.env.EMBED_BATCH || 32);
 const MAX_RETRIES = 3;
-const HEALTH_CHECK_INTERVAL = 30000; // 30 seconds
-const UPLOAD_LOCK_TTL_SEC = 60 * 60; // 1 hour per upload (adjust as needed)
+const HEALTH_CHECK_INTERVAL = 30000;
+const UPLOAD_LOCK_TTL_SEC = 3600;
 
-// Store interval reference
 let healthCheckInterval: NodeJS.Timeout;
 
-// Health check interval
 healthCheckInterval = setInterval(async () => {
   try {
-    const isHealthy = await checkConnectionHealth();
-    if (!isHealthy) {
-      console.warn("RabbitMQ connection unhealthy, attempting to reconnect...");
-      // The connection manager will handle reconnection automatically
-    }
-  } catch (error) {
-    console.error("Health check failed:", error);
-  }
+    await checkConnectionHealth();
+  } catch (error) {}
 }, HEALTH_CHECK_INTERVAL);
 
-// Add graceful shutdown for this worker
 process.on("SIGINT", () => {
-  console.log("SIGINT received, cleaning up embedding worker...");
   if (healthCheckInterval) {
     clearInterval(healthCheckInterval);
   }
 });
 
 export async function startEmbeddingWorker() {
-  console.log("Starting embedding worker with idempotency & centralized ACKs...");
-
   await consume(
     "embeddings.generate",
     async (payload: any, _channel: amqp.Channel, _msg: amqp.Message) => {
@@ -56,41 +42,28 @@ export async function startEmbeddingWorker() {
       };
 
       if (!uploadId || !companyId) {
-        console.warn("Missing uploadId/companyId; skipping.");
-        return; // centralized ACK will ack the message
+        return;
       }
 
-      // 🔐 Idempotency 1: Skip if upload already completed
       const upload = await prisma.upload.findUnique({ where: { id: uploadId } });
       if (!upload) {
-        console.warn(`Upload ${uploadId} not found; skipping.`);
         return;
       }
-      if (upload.status === "completed") {
-        console.log(`Upload ${uploadId} already completed; skipping.`);
-        return;
-      }
-      if (upload.status === "processing") {
-        console.log(`Upload ${uploadId} already processing; skipping.`);
+      if (upload.status === "completed" || upload.status === "processing") {
         return;
       }
 
-      // 🔐 Idempotency 2: Acquire a distributed lock to ensure single processing
       const lockKey = `lock:upload:${uploadId}`;
       const lockToken = await acquireLock(lockKey, UPLOAD_LOCK_TTL_SEC);
       if (!lockToken) {
-        console.log(`Could not acquire lock for ${uploadId}; another worker is processing.`);
         return;
       }
 
       try {
-        // Mark upload as processing
         await prisma.upload.update({
           where: { id: uploadId },
           data: { status: "processing", startedAt: new Date(), error: null },
         });
-
-        console.log(`Processing upload ${uploadId}, ${recordIds.length} records`);
 
         await redisPublisher.publishUploadProgress(
           companyId,
@@ -105,30 +78,20 @@ export async function startEmbeddingWorker() {
           }
         );
 
-        // Process embeddings with detailed progress
         await processEmbeddingsWithProgress(recordIds, companyId, uploadId);
-
-        // Run leak detection
         await runLeakDetection(companyId, uploadId);
 
-        console.log(`Successfully processed upload ${uploadId}`);
-
-        // Mark upload as completed
         await prisma.upload.update({
           where: { id: uploadId },
           data: { status: "completed", completedAt: new Date() },
         });
       } catch (error) {
-        console.error(`Failed to process upload ${uploadId}:`, error);
-
-        // Publish error to clients
         await redisPublisher.publishUploadError(
           companyId,
           uploadId,
           ErrorHandler.getErrorMessage(error)
         );
 
-        // Record failure in DB (don’t requeue; we’ll keep a record)
         await prisma.upload.update({
           where: { id: uploadId },
           data: {
@@ -136,21 +99,14 @@ export async function startEmbeddingWorker() {
             error: ErrorHandler.getErrorMessage(error),
           },
         });
-
-        // Re-throwing would NACK the message (centralized) -> duplicate later.
-        // We return to ACK and avoid reprocessing old work on restart.
         return;
       } finally {
-        // Always release the distributed lock
         try {
           await releaseLock(lockKey, lockToken);
-        } catch (e) {
-          console.warn(`Failed to release lock for ${uploadId}:`, e);
-        }
+        } catch (e) {}
       }
     },
     {
-      // Don’t requeue on error; we persist failure status and avoid duplicates
       requeueOnError: false,
     }
   );
@@ -161,11 +117,7 @@ async function processEmbeddingsWithProgress(
   companyId: string,
   uploadId: string
 ) {
-  // Create batches
-  const batches: string[][] = [];
-  for (let i = 0; i < recordIds.length; i += EMBED_BATCH) {
-    batches.push(recordIds.slice(i, i + EMBED_BATCH));
-  }
+  const batches = createBatches(recordIds, EMBED_BATCH);
 
   await redisPublisher.publishUploadProgress(
     companyId,
@@ -177,7 +129,7 @@ async function processEmbeddingsWithProgress(
   );
 
   for (const [batchIndex, batch] of batches.entries()) {
-    const progress = 10 + Math.round(((batchIndex + 1) / batches.length) * 40);
+    const progress = calculateProgress(batchIndex, batches.length, 10, 40);
 
     await redisPublisher.publishUploadProgress(
       companyId,
@@ -261,7 +213,6 @@ async function runLeakDetection(companyId: string, uploadId: string) {
     uploadId,
     companyId,
     async (progress, total, threats) => {
-      // progress is now a percentage between 50-95
       await redisPublisher.publishUploadProgress(
         companyId,
         uploadId,
@@ -277,7 +228,6 @@ async function runLeakDetection(companyId: string, uploadId: string) {
     }
   );
 
-  // Final completion
   await redisPublisher.publishUploadProgress(
     companyId,
     uploadId,

@@ -1,6 +1,3 @@
-// =============================================
-// config/redis.ts
-// =============================================
 import { createClient, RedisClientType } from "redis";
 import { randomBytes } from "crypto";
 
@@ -22,26 +19,16 @@ export async function getRedis() {
       socket: {
         reconnectStrategy: (retries) => {
           if (retries > MAX_RECONNECT_ATTEMPTS) {
-            console.error("Max Redis reconnection attempts reached");
             return false;
           }
-          const delay = Math.min(retries * 1000, 5000);
-          console.log(`Redis reconnecting in ${delay}ms (attempt ${retries})`);
-          return delay;
+          return Math.min(retries * 1000, 5000);
         },
       },
     }) as RedisClientType;
 
-    redisClient.on("error", (err) => console.error("Redis client error:", err.message));
-    redisClient.on("connect", () => console.log("Redis client connected"));
-    redisClient.on("ready", () => console.log("Redis client ready"));
-    redisClient.on("reconnecting", () => console.log("Redis client reconnecting"));
-    redisClient.on("end", () => console.log("Redis client disconnected"));
-
     await redisClient.connect();
     return redisClient;
   } catch (error) {
-    console.error("Failed to connect to Redis:", error);
     throw error;
   }
 }
@@ -55,7 +42,6 @@ export async function getRedisPubSub() {
   if (!url) throw new Error("REDIS_URL is required");
 
   if (isReconnecting) {
-    // Wait for ongoing reconnection
     await new Promise((resolve) => setTimeout(resolve, 1000));
     if (pubClient && subClient && pubClient.isOpen && subClient.isOpen) {
       return { pubClient, subClient };
@@ -65,10 +51,8 @@ export async function getRedisPubSub() {
   isReconnecting = true;
 
   try {
-    // Close existing connections properly
     await closeRedisPubSubConnections();
 
-    // Create new connections with enhanced reconnection strategy
     pubClient = createClient({
       url,
       socket: {
@@ -89,31 +73,12 @@ export async function getRedisPubSub() {
       },
     }) as RedisClientType;
 
-    const setupClientHandlers = (client: RedisClientType, type: string) => {
-      client.on("error", (err) => console.error(`Redis ${type} error:`, err.message));
-      client.on("connect", () => console.log(`Redis ${type} connected`));
-      client.on("ready", () => console.log(`Redis ${type} ready`));
-      client.on("reconnecting", () => console.log(`Redis ${type} reconnecting`));
-      client.on("end", () => {
-        console.log(`Redis ${type} disconnected`);
-        // Trigger reconnection
-        setTimeout(() => getRedisPubSub().catch(console.error), 5000);
-      });
-    };
-
-    setupClientHandlers(pubClient, "pub");
-    setupClientHandlers(subClient, "sub");
-
     await Promise.all([pubClient.connect(), subClient.connect()]);
 
     isReconnecting = false;
     return { pubClient, subClient };
   } catch (error) {
     isReconnecting = false;
-    console.error("Failed to connect to Redis pub/sub:", error);
-
-    // Schedule retry
-    setTimeout(() => getRedisPubSub().catch(console.error), 5000);
     throw error;
   }
 }
@@ -126,9 +91,7 @@ async function closeRedisPubSubConnections() {
         if (client && client.isOpen) {
           await client.quit();
         }
-      } catch (error) {
-        console.warn("Error closing Redis client:", error);
-      }
+      } catch (error) {}
     })
   );
   pubClient = null;
@@ -143,9 +106,7 @@ export async function closeRedisConnections() {
         if (client && client.isOpen) {
           await client.quit();
         }
-      } catch (error) {
-        console.warn("Error closing Redis client:", error);
-      }
+      } catch (error) {}
     })
   );
   redisClient = null;
@@ -153,7 +114,6 @@ export async function closeRedisConnections() {
   subClient = null;
 }
 
-// Health check function
 export async function checkRedisHealth(): Promise<boolean> {
   try {
     const client = await getRedis();
@@ -164,10 +124,6 @@ export async function checkRedisHealth(): Promise<boolean> {
   }
 }
 
-/**
- * Acquire a simple distributed lock using SET NX EX.
- * @returns a random token string if acquired, otherwise null.
- */
 export async function acquireLock(key: string, ttlSeconds: number): Promise<string | null> {
   const client = await getRedis();
   const token = randomBytes(16).toString("hex");
@@ -175,9 +131,6 @@ export async function acquireLock(key: string, ttlSeconds: number): Promise<stri
   return res === "OK" ? token : null;
 }
 
-/**
- * Release lock safely (only owner can release).
- */
 export async function releaseLock(key: string, token: string): Promise<void> {
   const client = await getRedis();
   const script = `

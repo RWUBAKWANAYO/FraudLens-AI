@@ -1,4 +1,3 @@
-// server/src/middleware/auth.ts
 import { Request, Response, NextFunction } from "express";
 import { AuthUtils } from "../utils/auth";
 import { prisma } from "../config/db";
@@ -19,7 +18,6 @@ export const authenticateToken = async (req: Request, res: Response, next: NextF
 
     const payload = AuthUtils.verifyToken(token);
 
-    // Verify user still exists and is active
     const user = await prisma.user.findUnique({
       where: { id: payload.userId },
       select: {
@@ -39,7 +37,6 @@ export const authenticateToken = async (req: Request, res: Response, next: NextF
       return res.status(401).json({ error: "Please verify your email before logging in" });
     }
 
-    // Add user to request object
     req.user = {
       id: user.id,
       email: user.email,

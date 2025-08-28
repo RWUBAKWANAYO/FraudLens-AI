@@ -14,7 +14,6 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.generateStaticExplanation = generateStaticExplanation;
 exports.generateDetailedExplanation = generateDetailedExplanation;
-// server/src/services/aiExplanation.ts
 const openai_1 = __importDefault(require("openai"));
 const node_fetch_1 = __importDefault(require("node-fetch"));
 const USE_LOCAL_AI = process.env.USE_LOCAL_AI === "true";
@@ -24,7 +23,6 @@ const openaiClient = USE_LOCAL_AI
     : new openai_1.default({
         apiKey: process.env.OPENAI_API_KEY,
     });
-// Static explanation templates - no AI calls
 function generateStaticExplanation(context) {
     const { threatType, additionalContext: a = {} } = context;
     const money = (v, cur) => v != null ? `${cur || "USD"} ${Number(v).toFixed(2)}` : "N/A";
@@ -43,7 +41,6 @@ function generateStaticExplanation(context) {
     };
     return (templates[threatType] || templates.default)();
 }
-// AI explanation ONLY for on-demand detailed view
 function generateDetailedExplanation(context) {
     return __awaiter(this, void 0, void 0, function* () {
         try {
@@ -54,11 +51,10 @@ function generateDetailedExplanation(context) {
         }
         catch (error) {
             console.error("AI detailed explanation failed:", error);
-            return generateStaticExplanation(context); // Fallback to static
+            return generateStaticExplanation(context);
         }
     });
 }
-// Helper functions (keep these private)
 function buildEvidenceMessage(ctx) {
     const { threatType, additionalContext: a = {} } = ctx;
     const money = (v, cur) => v != null ? `${cur || "USD"} ${Number(v).toFixed(2)}` : "N/A";
@@ -72,7 +68,7 @@ function buildEvidenceMessage(ctx) {
             return `Suspicious activity detected for ${ctx.txId || "transaction"}.`;
     }
 }
-function buildOpenAIPrompt(context, evidence) {
+function buildOpenAIPrompt(_context, evidence) {
     return `As a financial risk analyst, provide a comprehensive 3-4 sentence analysis:
 
 EVIDENCE: ${evidence}

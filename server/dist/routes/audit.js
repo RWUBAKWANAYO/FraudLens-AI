@@ -1,13 +1,11 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.auditRouter = exports.router = void 0;
-// server/src/routes/audit.ts
 const express_1 = require("express");
 const upload_1 = require("../controllers/upload");
 const alerts_1 = require("../controllers/alerts");
 const multer_1 = require("../middleware/multer");
 const threats_1 = require("../controllers/threats");
-const similarity_search_1 = require("../controllers/similarity-search");
 const rules_1 = require("../controllers/rules");
 const auth_1 = require("../middleware/auth");
 exports.router = (0, express_1.Router)();
@@ -16,7 +14,6 @@ exports.router.post("/upload", auth_1.authenticateToken, multer_1.multerConfig, 
 exports.router.get("/alerts", alerts_1.listAlerts);
 exports.router.get("/threats", threats_1.listThreats);
 exports.router.get("/threats/:threatId/analysis", threats_1.getThreatDetails);
-exports.router.post("/similarity-search", similarity_search_1.findSimilarity);
 exports.router.post("/rules", rules_1.createRule);
 exports.router.get("/rules", rules_1.listRules);
 exports.router.patch("/rules", rules_1.updateRule);

@@ -17,7 +17,6 @@ exports.webhookCreateValidation = [
         .isURL()
         .withMessage("Valid URL is required")
         .custom((url) => {
-        // Prevent internal URLs in production
         if (process.env.NODE_ENV === "production") {
             const parsedUrl = new URL(url);
             if (["localhost", "127.0.0.1", "0.0.0.0"].includes(parsedUrl.hostname)) {
@@ -67,7 +66,6 @@ exports.webhookListValidation = [
 exports.webhookIdValidation = [
     (0, express_validator_1.param)("webhookId").isUUID().withMessage("Valid webhook ID is required"),
 ];
-// Middleware to check if user owns the webhook
 const requireWebhookOwnership = (req, res, next) => __awaiter(void 0, void 0, void 0, function* () {
     var _a;
     try {
@@ -97,7 +95,6 @@ const requireWebhookOwnership = (req, res, next) => __awaiter(void 0, void 0, vo
     }
 });
 exports.requireWebhookOwnership = requireWebhookOwnership;
-// Middleware to check if user can manage webhooks (ADMIN or MANAGER)
 const requireWebhookManagement = (req, res, next) => {
     if (!req.user) {
         return res.status(401).json({ error: "Authentication required" });

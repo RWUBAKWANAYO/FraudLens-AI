@@ -1,4 +1,3 @@
-// server/src/services/redisPublisher.ts
 import { getRedisPubSub } from "../config/redis";
 
 interface PublishOptions {
@@ -72,7 +71,6 @@ export class RedisPublisher {
     return this.publish("threat_updates", { companyId, event });
   }
 
-  // NEW: Enhanced status publishing with detailed progress
   async publishUploadProgress(
     companyId: string,
     uploadId: string,

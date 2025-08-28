@@ -1,6 +1,3 @@
-// =============================================
-// server/src/queue/connectionManager.ts
-// =============================================
 // @ts-nocheck
 
 import * as amqp from "amqplib";
@@ -18,8 +15,6 @@ const MAX_RECONNECT_ATTEMPTS = Number(process.env.RABBIT_MAX_RECONNECT || 10);
 const BASE_RECONNECT_DELAY = Number(process.env.RABBIT_RECONNECT_BASE_MS || 1000);
 
 let isShuttingDown = false;
-
-// Connection state
 let connectionState: "connected" | "disconnected" | "connecting" = "disconnected";
 export async function getConnection(): Promise<amqp.Connection> {
   if (connection && connection.connection && connectionState === "connected") {
@@ -52,7 +47,6 @@ async function establishConnection(): Promise<amqp.Connection> {
     const conn = await amqp.connect(url);
 
     conn.on("error", (err) => {
-      // amqplib emits 'error' on connection; log and trigger reconnection
       console.error("RabbitMQ connection error:", err && (err as Error).message);
       connectionState = "disconnected";
       scheduleReconnect();
@@ -111,8 +105,6 @@ export async function getChannel(): Promise<amqp.Channel> {
 
     const conn = await getConnection();
     publisherChannel = await conn.createChannel();
-
-    // publisher channel error/close handlers: close and allow recreation
     publisherChannel.on("error", (err) => {
       console.error("Publisher channel error:", (err && (err as Error).message) || err);
       try {
@@ -134,15 +126,10 @@ export async function getChannel(): Promise<amqp.Channel> {
   }
 }
 
-/**
- * Create (and return) a fresh consumer channel for a single consumer.
- * Consumer channel should be used exclusively by that consumer.
- */
 export async function createConsumerChannel(
   consumerId: string,
   prefetch = Number(process.env.WORKER_PREFETCH || 8)
 ): Promise<amqp.Channel> {
-  // If we already have one for this id and it's open, return it
   const existing = consumerChannels.get(consumerId);
   if (existing && existing.connection) {
     return existing;
@@ -170,13 +157,9 @@ export async function createConsumerChannel(
   return ch;
 }
 
-/**
- * Health check for current connection & channels.
- */
 export async function checkConnectionHealth(): Promise<boolean> {
   try {
     if (!connection || connectionState !== "connected") return false;
-    // Try a lightweight operation: create a temporary channel, assert/delete a temporary queue
     const ch = await connection.createChannel();
     try {
       const q = `health_check_${Date.now()}_${Math.floor(Math.random() * 1000)}`;
@@ -200,7 +183,6 @@ export async function checkConnectionHealth(): Promise<boolean> {
  */
 export async function closeConnections(): Promise<void> {
   isShuttingDown = true;
-  // Close consumer channels
   await Promise.allSettled(
     Array.from(consumerChannels.values()).map(async (ch) => {
       if (ch && ch.close) {
@@ -215,7 +197,6 @@ export async function closeConnections(): Promise<void> {
 
   consumerChannels.clear();
 
-  // Close publisher channel
   if (publisherChannel) {
     try {
       await publisherChannel.close();

@@ -43,7 +43,6 @@ function getThreatDetails(req, res) {
             if (!threat) {
                 return res.status(404).json({ error: "Threat not found" });
             }
-            // Check if we already have an AI explanation
             const metadata = threat.metadata;
             if (metadata === null || metadata === void 0 ? void 0 : metadata.aiExplanation) {
                 return res.json({
@@ -59,7 +58,6 @@ function getThreatDetails(req, res) {
                     source: "cached",
                 });
             }
-            // Use stored context or build basic context from threat data
             const context = (metadata === null || metadata === void 0 ? void 0 : metadata.aiContext) || {
                 threatType: threat.threatType,
                 amount: (_a = threat.record) === null || _a === void 0 ? void 0 : _a.amount,
@@ -67,9 +65,7 @@ function getThreatDetails(req, res) {
                 txId: (_c = threat.record) === null || _c === void 0 ? void 0 : _c.txId,
                 additionalContext: metadata === null || metadata === void 0 ? void 0 : metadata.context,
             };
-            // Generate AI explanation ON-DEMAND (only when user requests)
             const detailedExplanation = yield (0, leakExplanation_1.generateDetailedExplanation)(context);
-            // Save the AI explanation to prevent regeneration
             const updatedThreat = yield db_1.prisma.threat.update({
                 where: { id: threatId },
                 data: {
