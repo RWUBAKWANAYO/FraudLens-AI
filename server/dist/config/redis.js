@@ -13,8 +13,13 @@ exports.getRedis = getRedis;
 exports.getRedisPubSub = getRedisPubSub;
 exports.closeRedisConnections = closeRedisConnections;
 exports.checkRedisHealth = checkRedisHealth;
+exports.acquireLock = acquireLock;
+exports.releaseLock = releaseLock;
+// =============================================
 // config/redis.ts
+// =============================================
 const redis_1 = require("redis");
+const crypto_1 = require("crypto");
 let redisClient = null;
 let pubClient = null;
 let subClient = null;
@@ -165,8 +170,36 @@ function checkRedisHealth() {
             yield client.ping();
             return true;
         }
-        catch (error) {
+        catch (_a) {
             return false;
         }
+    });
+}
+/**
+ * Acquire a simple distributed lock using SET NX EX.
+ * @returns a random token string if acquired, otherwise null.
+ */
+function acquireLock(key, ttlSeconds) {
+    return __awaiter(this, void 0, void 0, function* () {
+        const client = yield getRedis();
+        const token = (0, crypto_1.randomBytes)(16).toString("hex");
+        const res = yield client.set(key, token, { NX: true, EX: ttlSeconds });
+        return res === "OK" ? token : null;
+    });
+}
+/**
+ * Release lock safely (only owner can release).
+ */
+function releaseLock(key, token) {
+    return __awaiter(this, void 0, void 0, function* () {
+        const client = yield getRedis();
+        const script = `
+    if redis.call("GET", KEYS[1]) == ARGV[1] then
+      return redis.call("DEL", KEYS[1])
+    else
+      return 0
+    end
+  `;
+        yield client.eval(script, { keys: [key], arguments: [token] });
     });
 }

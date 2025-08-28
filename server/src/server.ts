@@ -4,7 +4,7 @@ import { Server } from "socket.io";
 import { connectDB } from "./config/db";
 import { socketService } from "./services/socketService";
 import { closeRedisConnections } from "./config/redis";
-import { closeConnections as closeRabbitMQConnections } from "./queue/connectionManager"; // Import RabbitMQ close function
+import { closeConnections as closeRabbitMQConnections } from "./queue/connectionManager";
 
 const server = http.createServer(app);
 const PORT = process.env.PORT || 8080;

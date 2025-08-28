@@ -15,6 +15,18 @@ const db_1 = require("../config/db");
 const crypto_1 = require("crypto");
 const error_1 = require("../types/error");
 const redis_1 = require("../config/redis");
+const THREAT_TYPE_MAP = {
+    DUP_IN_BATCH__TXID: "Duplicate transaction ID used multiple times",
+    DUP_IN_DB__TXID: "Duplicate transaction ID found in historical data",
+    DUP_IN_BATCH__CANONICAL: "Suspicious payment pattern detected",
+    DUP_IN_DB__CANONICAL: "Historical suspicious payment pattern",
+    SIMILARITY_MATCH: "Pattern matching known fraudulent activity",
+    RULE_TRIGGER: "Custom security rule violation",
+    AMOUNT_ANOMALY: "Unusual transaction amount",
+    VELOCITY_ANOMALY: "Unusual transaction frequency",
+    GEO_ANOMALY: "Suspicious geographic activity",
+    TIME_ANOMALY: "Unusual transaction timing",
+};
 class WebhookService {
     constructor() {
         this.retryDelays = [1000, 5000, 15000, 30000, 60000]; // Exponential backoff
@@ -126,6 +138,15 @@ class WebhookService {
                 const enhancedPayload = Object.assign(Object.assign({}, payload), { environment: this.environment, webhookId: webhook.id, timestamp: new Date().toISOString() });
                 // ✅ CRITICAL: Add this line to format the payload for the destination
                 const formattedPayload = this.formatPayloadForDestination(enhancedPayload, webhook.url);
+                if (formattedPayload === null) {
+                    console.log(`Skipping webhook delivery for event ${payload.event} to ${webhook.url}`);
+                    return {
+                        success: true,
+                        statusCode: 200,
+                        retryable: false,
+                        responseTime: Date.now() - startTime,
+                    };
+                }
                 const response = yield fetch(webhook.url, {
                     method: "POST",
                     headers: {
@@ -183,53 +204,34 @@ class WebhookService {
     }
     // Add this method to your WebhookService class
     formatPayloadForDestination(payload, webhookUrl) {
-        var _a, _b;
-        // Format for Slack
-        if (webhookUrl.includes("hooks.slack.com")) {
-            const threatData = ((_a = payload.data) === null || _a === void 0 ? void 0 : _a.threat) || {};
-            const recordData = ((_b = payload.data) === null || _b === void 0 ? void 0 : _b.record) || {};
+        var _a, _b, _c, _d, _e, _f;
+        // Format for Slack - UPLOAD COMPLETE (summary notification)
+        if (webhookUrl.includes("hooks.slack.com") && payload.event === "upload.complete") {
+            const uploadData = ((_a = payload.data) === null || _a === void 0 ? void 0 : _a.upload) || {};
+            const summary = ((_b = payload.data) === null || _b === void 0 ? void 0 : _b.summary) || {};
+            // Only send notification if threats were found
+            if (!summary.flagged || summary.flagged === 0) {
+                console.log("No threats detected, skipping Slack notification");
+                return null; // Skip delivery
+            }
+            const primaryThreat = THREAT_TYPE_MAP[(_d = (_c = summary.byRule) === null || _c === void 0 ? void 0 : _c[0]) === null || _d === void 0 ? void 0 : _d.rule_id] || "N/A";
+            const dashboardUrl = process.env.FRONTEND_URL || "https://yourplatform.com";
+            const reportId = uploadData.id || "123";
             return {
-                text: `🚨 Fraud Detection Alert: ${threatData.type || "Unknown threat"} - ${recordData.txId || "No TX ID"}`,
+                text: `📊 Fraud Detection Report Complete\n\n• ${summary.totalRecords} records analyzed\n• ${summary.flagged} suspicious transaction${summary.flagged !== 1 ? "s" : ""} flagged (USD ${((_e = summary.flaggedValue) === null || _e === void 0 ? void 0 : _e.toFixed(2)) || "0.00"})\n\n⚠️ Detected include: ${primaryThreat}\n\n👉 View full details in FraudGuard: ${dashboardUrl}/dashboard/reports/${reportId}`,
                 blocks: [
                     {
-                        type: "header",
+                        type: "section",
                         text: {
-                            type: "plain_text",
-                            text: "🚨 Fraud Detection Alert",
-                            emoji: true,
+                            type: "mrkdwn",
+                            text: `📊 *Fraud Detection Report Complete*\n\n• ${summary.totalRecords} records analyzed\n• ${summary.flagged} suspicious transaction${summary.flagged !== 1 ? "s" : ""} flagged (USD ${((_f = summary.flaggedValue) === null || _f === void 0 ? void 0 : _f.toFixed(2)) || "0.00"})\n\n⚠️ *Detected:* ${primaryThreat}`,
                         },
-                    },
-                    {
-                        type: "section",
-                        fields: [
-                            {
-                                type: "mrkdwn",
-                                text: `*Type:*\n${threatData.type || "Unknown"}`,
-                            },
-                            {
-                                type: "mrkdwn",
-                                text: `*Confidence:*\n${threatData.confidence ? Math.round(threatData.confidence * 100) + "%" : "N/A"}`,
-                            },
-                        ],
-                    },
-                    {
-                        type: "section",
-                        fields: [
-                            {
-                                type: "mrkdwn",
-                                text: `*Transaction ID:*\n${recordData.txId || "N/A"}`,
-                            },
-                            {
-                                type: "mrkdwn",
-                                text: `*Amount:*\n${recordData.amount || "N/A"} ${recordData.currency || ""}`,
-                            },
-                        ],
                     },
                     {
                         type: "section",
                         text: {
                             type: "mrkdwn",
-                            text: `*Description:*\n${threatData.description || "No description available"}`,
+                            text: `👉 View full details in FraudGuard: ${dashboardUrl}/dashboard/reports/${reportId}`,
                         },
                     },
                     {
@@ -237,13 +239,18 @@ class WebhookService {
                         elements: [
                             {
                                 type: "mrkdwn",
-                                text: `Detected at: ${payload.timestamp || new Date().toISOString()}`,
+                                text: `Completed at: ${payload.timestamp || new Date().toISOString()}`,
                             },
                         ],
                     },
                 ],
             };
         }
+        // For individual threats to Slack - return null to skip them
+        if (webhookUrl.includes("hooks.slack.com") && payload.event === "threat.created") {
+            return null; // This prevents individual threat notifications to Slack
+        }
+        // For other webhooks or events, return the original payload
         return payload;
     }
     deliverWithRetry(webhook, payload) {

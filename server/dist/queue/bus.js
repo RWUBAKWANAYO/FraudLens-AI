@@ -1,5 +1,4 @@
 "use strict";
-// server/src/queue/bus.ts
 var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, P, generator) {
     function adopt(value) { return value instanceof P ? value : new P(function (resolve) { resolve(value); }); }
     return new (P || (P = Promise))(function (resolve, reject) {
@@ -13,58 +12,120 @@ Object.defineProperty(exports, "__esModule", { value: true });
 exports.publish = publish;
 exports.consume = consume;
 const connectionManager_1 = require("./connectionManager");
-const MAX_PUBLISH_RETRIES = 3;
-const PUBLISH_RETRY_DELAY = 1000;
+const MAX_PUBLISH_RETRIES = 4;
+const PUBLISH_RETRY_BASE_MS = 500;
 function publish(queue_1, msg_1) {
     return __awaiter(this, arguments, void 0, function* (queue, msg, retryCount = 0) {
         try {
             const channel = yield (0, connectionManager_1.getChannel)();
+            // Ensure queue exists (idempotent)
             yield channel.assertQueue(queue, { durable: true });
-            const success = channel.sendToQueue(queue, Buffer.from(JSON.stringify(msg)), {
+            const ok = channel.sendToQueue(queue, Buffer.from(JSON.stringify(msg)), {
                 persistent: true,
+                contentType: "application/json",
             });
-            if (!success) {
+            if (!ok) {
+                // flow control: message buffered by server; treat as temporary failure and retry
                 throw new Error("Message not queued (flow control)");
             }
             return true;
         }
         catch (error) {
-            console.error(`Failed to publish to ${queue} (attempt ${retryCount + 1}):`, error);
+            console.error(`Failed to publish to ${queue} (attempt ${retryCount + 1}):`, error && error.message);
+            // If channel/connection closed, try to recreate and retry
             if (retryCount < MAX_PUBLISH_RETRIES) {
-                yield new Promise((resolve) => setTimeout(resolve, PUBLISH_RETRY_DELAY * (retryCount + 1)));
+                const delay = PUBLISH_RETRY_BASE_MS * Math.pow(2, retryCount);
+                yield new Promise((r) => setTimeout(r, delay));
                 return publish(queue, msg, retryCount + 1);
             }
             return false;
         }
     });
 }
-function consume(queue, handler) {
-    return __awaiter(this, void 0, void 0, function* () {
-        try {
-            const channel = yield (0, connectionManager_1.getChannel)();
-            yield channel.assertQueue(queue, { durable: true });
-            console.log(`Starting consumer for queue: ${queue}`);
-            yield channel.consume(queue, (msg) => __awaiter(this, void 0, void 0, function* () {
-                if (!msg)
-                    return;
+/**
+ * Consume helper that gives each consumer its own channel.
+ * The handler receives (payload, channel, msg) so it can do manual ack/nack if needed,
+ * but the function below will ack on success and nack on handler throw by default.
+ */
+function consume(queue_1, handler_1) {
+    return __awaiter(this, arguments, void 0, function* (queue, handler, opts = {}) {
+        const consumerId = opts.consumerId || `${queue}-${Math.floor(Math.random() * 10000)}`;
+        const prefetch = typeof opts.prefetch === "number" ? opts.prefetch : undefined;
+        const requeueOnError = !!opts.requeueOnError;
+        function start() {
+            return __awaiter(this, void 0, void 0, function* () {
                 try {
-                    const payload = JSON.parse(msg.content.toString());
-                    yield handler(payload, channel, msg); // Pass channel and msg
+                    const ch = yield (0, connectionManager_1.createConsumerChannel)(consumerId, prefetch);
+                    yield ch.assertQueue(queue, { durable: true });
+                    console.log(`Starting consumer ${consumerId} for queue: ${queue}`);
+                    ch.consume(queue, (msg) => __awaiter(this, void 0, void 0, function* () {
+                        if (!msg)
+                            return;
+                        let payload;
+                        try {
+                            payload = JSON.parse(msg.content.toString());
+                        }
+                        catch (err) {
+                            console.error("Failed to parse message JSON; acking to drop:", err);
+                            safeAck(ch, msg);
+                            return;
+                        }
+                        try {
+                            yield handler(payload, ch, msg);
+                            // centralised ack on success
+                            safeAck(ch, msg);
+                        }
+                        catch (err) {
+                            console.error(`Error processing message from ${queue}:`, (err && err.message) || err);
+                            // NACK - decide whether to requeue
+                            safeNack(ch, msg, requeueOnError);
+                        }
+                    }), { noAck: false });
+                    // when channel closes unexpectedly restart consumer
+                    ch.on("close", () => {
+                        console.warn(`Consumer channel ${consumerId} closed; restarting in 2s`);
+                        setTimeout(start, 2000);
+                    });
+                    ch.on("error", (err) => {
+                        console.error(`Consumer channel ${consumerId} error:`, (err && err.message) || err);
+                    });
                 }
-                catch (error) {
-                    console.error(`Error processing message from ${queue}:`, error);
-                    // Handle errors appropriately
+                catch (err) {
+                    console.error(`Failed to start consumer ${consumerId} for ${queue}:`, err);
+                    setTimeout(start, 2000);
                 }
-            }), { noAck: false } // Important: Manual acknowledgment
-            );
+            });
         }
-        catch (error) {
-            console.error(`Failed to start consumer for ${queue}:`, error);
-            setTimeout(() => consume(queue, handler), 5000);
-        }
+        start();
     });
 }
-// Graceful shutdown handler
+function safeAck(channel, msg) {
+    try {
+        if (channel && channel.connection) {
+            channel.ack(msg);
+        }
+        else {
+            console.warn("Attempted to ack on closed channel — skipping");
+        }
+    }
+    catch (err) {
+        console.warn("Failed to ack message (channel may be closed):", (err && err.message) || err);
+    }
+}
+function safeNack(channel, msg, requeue = false) {
+    try {
+        if (channel && channel.connection) {
+            channel.nack(msg, false, requeue);
+        }
+        else {
+            console.warn("Attempted to nack on closed channel — skipping");
+        }
+    }
+    catch (err) {
+        console.warn("Failed to nack message (channel may be closed):", (err && err.message) || err);
+    }
+}
+// Graceful shutdown handlers
 process.on("SIGTERM", () => __awaiter(void 0, void 0, void 0, function* () {
     console.log("SIGTERM received, closing RabbitMQ connections");
     yield (0, connectionManager_1.closeConnections)();

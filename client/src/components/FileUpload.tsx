@@ -31,6 +31,10 @@ export default function FileUpload({ companyId }: { companyId: string }) {
       const response = await fetch(`${process.env.NEXT_PUBLIC_SERVER_URL}/audit/upload`, {
         method: "POST",
         body: formData,
+        headers: {
+          Authorization:
+            "Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VySWQiOiI4Yzg0MmE2Ny02OWFjLTQzNDQtYmEzYS01ODg4MzBhZmVhZGUiLCJlbWFpbCI6Imh1bWJsZW5heW9AZ21haWwuY29tIiwiY29tcGFueUlkIjoiM2ZmOGI4M2MtMzlmYS00ZGYyLWI0NTEtZDMzOGNkYjBmYTJkIiwicm9sZSI6IkFETUlOIiwiaWF0IjoxNzU2MjM2NzI5LCJleHAiOjE3NTY4NDE1Mjl9.X2OI1hrgOW8hK18sG9hxmbNGToshZNRr0OzLofQ7hAs",
+        },
       });
 
       if (response.ok) {

@@ -123,6 +123,7 @@ export async function detectLeaks(
   companyId: string,
   onProgress?: ProgressCallback
 ) {
+  const startTime = Date.now();
   console.time("Total leak detection time");
   console.log(
     `[DETECT_LEAKS] Starting for upload ${uploadId}, company ${companyId}, ${records.length} records`
@@ -601,7 +602,7 @@ export async function detectLeaks(
       alreadyFlaggedRecordIds,
       similarityFlaggedRecordIds,
       emit,
-      async (processed, totalSimilarity, threats) => {
+      async (processed, totalSimilarity, _threats) => {
         await updateStageProgress((100 * processed) / totalSimilarity, 3);
       }
     );
@@ -644,8 +645,44 @@ export async function detectLeaks(
     ).toFixed(1)}%), worth ~${flaggedValue.toFixed(2)}.`,
     byRule,
   };
+  // ---------------- Send Upload Complete Notification ----------------
+  console.log("[WEBHOOK] Sending upload complete notification");
 
-  console.timeEnd("Total leak detection time");
+  try {
+    const webhooks = await webhookService.getMockWebhooks(companyId);
+    const processingTime = Date.now() - startTime;
+
+    // Group threats by type for better reporting
+    const threatsByType: Record<string, number> = {};
+    threatsCreated.forEach((threat) => {
+      threatsByType[threat.threatType] = (threatsByType[threat.threatType] || 0) + 1;
+    });
+
+    const threatSummary = Object.entries(threatsByType)
+      .map(([type, count]) => `• ${type}: ${count} threats`)
+      .join("\n");
+
+    for (const webhook of webhooks) {
+      if (webhook.events.includes("upload.complete")) {
+        console.log(`Queueing upload.complete webhook for ${webhook.url}`);
+
+        await queueWebhook(webhook.id, companyId, "upload.complete", {
+          upload: {
+            id: uploadId,
+            processingTime,
+            status: "complete",
+            recordsAnalyzed: total,
+            threatsDetected: flagged,
+          },
+          summary: summary,
+          threats: threatsCreated.slice(0, 10), // Limit to top 10 for summary
+          threatSummary: threatSummary || "No threats detected",
+        });
+      }
+    }
+  } catch (webhookError) {
+    console.error("Upload complete webhook failed:", webhookError);
+  }
   return { threatsCreated, summary };
 }
 

@@ -20,6 +20,19 @@ export interface WebhookDeliveryResult {
   responseTime?: number;
 }
 
+const THREAT_TYPE_MAP: Record<string, string> = {
+  DUP_IN_BATCH__TXID: "Duplicate transaction ID used multiple times",
+  DUP_IN_DB__TXID: "Duplicate transaction ID found in historical data",
+  DUP_IN_BATCH__CANONICAL: "Suspicious payment pattern detected",
+  DUP_IN_DB__CANONICAL: "Historical suspicious payment pattern",
+  SIMILARITY_MATCH: "Pattern matching known fraudulent activity",
+  RULE_TRIGGER: "Custom security rule violation",
+  AMOUNT_ANOMALY: "Unusual transaction amount",
+  VELOCITY_ANOMALY: "Unusual transaction frequency",
+  GEO_ANOMALY: "Suspicious geographic activity",
+  TIME_ANOMALY: "Unusual transaction timing",
+};
+
 export class WebhookService {
   private static instance: WebhookService;
   private retryDelays = [1000, 5000, 15000, 30000, 60000]; // Exponential backoff
@@ -167,6 +180,16 @@ export class WebhookService {
       // ✅ CRITICAL: Add this line to format the payload for the destination
       const formattedPayload = this.formatPayloadForDestination(enhancedPayload, webhook.url);
 
+      if (formattedPayload === null) {
+        console.log(`Skipping webhook delivery for event ${payload.event} to ${webhook.url}`);
+        return {
+          success: true,
+          statusCode: 200,
+          retryable: false,
+          responseTime: Date.now() - startTime,
+        };
+      }
+
       const response = await fetch(webhook.url, {
         method: "POST",
         headers: {
@@ -229,57 +252,48 @@ export class WebhookService {
 
   // Add this method to your WebhookService class
   private formatPayloadForDestination(payload: any, webhookUrl: string): any {
-    // Format for Slack
-    if (webhookUrl.includes("hooks.slack.com")) {
-      const threatData = payload.data?.threat || {};
-      const recordData = payload.data?.record || {};
+    // Format for Slack - UPLOAD COMPLETE (summary notification)
+    if (webhookUrl.includes("hooks.slack.com") && payload.event === "upload.complete") {
+      const uploadData = payload.data?.upload || {};
+      const summary = payload.data?.summary || {};
+
+      // Only send notification if threats were found
+      if (!summary.flagged || summary.flagged === 0) {
+        console.log("No threats detected, skipping Slack notification");
+        return null; // Skip delivery
+      }
+
+      const primaryThreat = THREAT_TYPE_MAP[(summary.byRule?.[0] as any)?.rule_id] || "N/A";
+      const dashboardUrl = process.env.FRONTEND_URL || "https://yourplatform.com";
+      const reportId = uploadData.id || "123";
 
       return {
-        text: `🚨 Fraud Detection Alert: ${threatData.type || "Unknown threat"} - ${
-          recordData.txId || "No TX ID"
-        }`,
+        text: `📊 Fraud Detection Report Complete\n\n• ${
+          summary.totalRecords
+        } records analyzed\n• ${summary.flagged} suspicious transaction${
+          summary.flagged !== 1 ? "s" : ""
+        } flagged (USD ${
+          summary.flaggedValue?.toFixed(2) || "0.00"
+        })\n\n⚠️ Detected include: ${primaryThreat}\n\n👉 View full details in FraudGuard: ${dashboardUrl}/dashboard/reports/${reportId}`,
         blocks: [
           {
-            type: "header",
+            type: "section",
             text: {
-              type: "plain_text",
-              text: "🚨 Fraud Detection Alert",
-              emoji: true,
+              type: "mrkdwn",
+              text: `📊 *Fraud Detection Report Complete*\n\n• ${
+                summary.totalRecords
+              } records analyzed\n• ${summary.flagged} suspicious transaction${
+                summary.flagged !== 1 ? "s" : ""
+              } flagged (USD ${
+                summary.flaggedValue?.toFixed(2) || "0.00"
+              })\n\n⚠️ *Detected:* ${primaryThreat}`,
             },
-          },
-          {
-            type: "section",
-            fields: [
-              {
-                type: "mrkdwn",
-                text: `*Type:*\n${threatData.type || "Unknown"}`,
-              },
-              {
-                type: "mrkdwn",
-                text: `*Confidence:*\n${
-                  threatData.confidence ? Math.round(threatData.confidence * 100) + "%" : "N/A"
-                }`,
-              },
-            ],
-          },
-          {
-            type: "section",
-            fields: [
-              {
-                type: "mrkdwn",
-                text: `*Transaction ID:*\n${recordData.txId || "N/A"}`,
-              },
-              {
-                type: "mrkdwn",
-                text: `*Amount:*\n${recordData.amount || "N/A"} ${recordData.currency || ""}`,
-              },
-            ],
           },
           {
             type: "section",
             text: {
               type: "mrkdwn",
-              text: `*Description:*\n${threatData.description || "No description available"}`,
+              text: `👉 View full details in FraudGuard: ${dashboardUrl}/dashboard/reports/${reportId}`,
             },
           },
           {
@@ -287,13 +301,19 @@ export class WebhookService {
             elements: [
               {
                 type: "mrkdwn",
-                text: `Detected at: ${payload.timestamp || new Date().toISOString()}`,
+                text: `Completed at: ${payload.timestamp || new Date().toISOString()}`,
               },
             ],
           },
         ],
       };
     }
+    // For individual threats to Slack - return null to skip them
+    if (webhookUrl.includes("hooks.slack.com") && payload.event === "threat.created") {
+      return null; // This prevents individual threat notifications to Slack
+    }
+
+    // For other webhooks or events, return the original payload
     return payload;
   }
 

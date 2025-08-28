@@ -7,6 +7,7 @@
     "db:seed": "ts-node-dev prisma/seed.ts",
     "db:reset": "prisma migrate reset && npm run db:seed",
     "start:workers": "node dist/workers/index.js",
+    "purge:queues": "ts-node src/scripts/purgeQueues.ts",
     "prebuild": "tslint -c tslint.json -p tsconfig.json --fix",
     "build": "tsc",
     "watch": "tsc -w",

@@ -4,7 +4,7 @@ ALTER TABLE `Record`
 
 -- Add vector index with chosen distance metric
 ALTER TABLE `Record` 
-  ADD VECTOR INDEX IF NOT EXISTS idx_record_embedding_vec (`embeddingVec`) USING COSINE;
+  ADD VECTOR INDEX IF NOT EXISTS idx_record_embedding_vec (`embeddingVec`) DISTANCE = 'COSINE';
 
 -- Extra useful indexes
 CREATE INDEX IF NOT EXISTS idx_record_company_date 

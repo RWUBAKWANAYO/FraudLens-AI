@@ -1,30 +1,40 @@
+// =============================================
 // server/src/queue/bus.ts
-
+// =============================================
 import * as amqp from "amqplib";
-import { getChannel, closeConnections } from "./connectionManager";
+import { getChannel, createConsumerChannel, closeConnections } from "./connectionManager";
 
-const MAX_PUBLISH_RETRIES = 3;
-const PUBLISH_RETRY_DELAY = 1000;
+const MAX_PUBLISH_RETRIES = 4;
+const PUBLISH_RETRY_BASE_MS = 500;
 
 export async function publish(queue: string, msg: any, retryCount = 0): Promise<boolean> {
   try {
     const channel = await getChannel();
+
+    // Ensure queue exists (idempotent)
     await channel.assertQueue(queue, { durable: true });
 
-    const success = channel.sendToQueue(queue, Buffer.from(JSON.stringify(msg)), {
+    const ok = channel.sendToQueue(queue, Buffer.from(JSON.stringify(msg)), {
       persistent: true,
+      contentType: "application/json",
     });
 
-    if (!success) {
+    if (!ok) {
+      // flow control: message buffered by server; treat as temporary failure and retry
       throw new Error("Message not queued (flow control)");
     }
 
     return true;
   } catch (error) {
-    console.error(`Failed to publish to ${queue} (attempt ${retryCount + 1}):`, error);
+    console.error(
+      `Failed to publish to ${queue} (attempt ${retryCount + 1}):`,
+      error && (error as Error).message
+    );
 
+    // If channel/connection closed, try to recreate and retry
     if (retryCount < MAX_PUBLISH_RETRIES) {
-      await new Promise((resolve) => setTimeout(resolve, PUBLISH_RETRY_DELAY * (retryCount + 1)));
+      const delay = PUBLISH_RETRY_BASE_MS * Math.pow(2, retryCount);
+      await new Promise((r) => setTimeout(r, delay));
       return publish(queue, msg, retryCount + 1);
     }
 
@@ -32,38 +42,113 @@ export async function publish(queue: string, msg: any, retryCount = 0): Promise<
   }
 }
 
+/**
+ * Consume helper that gives each consumer its own channel.
+ * The handler receives (payload, channel, msg) so it can do manual ack/nack if needed,
+ * but the function below will ack on success and nack on handler throw by default.
+ */
 export async function consume(
   queue: string,
-  handler: (payload: any, channel: amqp.Channel, msg: amqp.Message) => Promise<void>
+  handler: (payload: any, channel: amqp.Channel, msg: amqp.Message) => Promise<void>,
+  opts: {
+    consumerId?: string;
+    prefetch?: number;
+    requeueOnError?: boolean;
+  } = {}
 ) {
+  const consumerId = opts.consumerId || `${queue}-${Math.floor(Math.random() * 10000)}`;
+  const prefetch = typeof opts.prefetch === "number" ? opts.prefetch : undefined;
+  const requeueOnError = !!opts.requeueOnError;
+
+  async function start() {
+    try {
+      const ch = await createConsumerChannel(consumerId, prefetch);
+      await ch.assertQueue(queue, { durable: true });
+
+      console.log(`Starting consumer ${consumerId} for queue: ${queue}`);
+
+      ch.consume(
+        queue,
+        async (msg) => {
+          if (!msg) return;
+
+          let payload: any;
+          try {
+            payload = JSON.parse(msg.content.toString());
+          } catch (err) {
+            console.error("Failed to parse message JSON; acking to drop:", err);
+            safeAck(ch, msg);
+            return;
+          }
+
+          try {
+            await handler(payload, ch, msg);
+            // centralised ack on success
+            safeAck(ch, msg);
+          } catch (err) {
+            console.error(
+              `Error processing message from ${queue}:`,
+              (err && (err as Error).message) || err
+            );
+            // NACK - decide whether to requeue
+            safeNack(ch, msg, requeueOnError);
+          }
+        },
+        { noAck: false }
+      );
+
+      // when channel closes unexpectedly restart consumer
+      ch.on("close", () => {
+        console.warn(`Consumer channel ${consumerId} closed; restarting in 2s`);
+        setTimeout(start, 2000);
+      });
+
+      ch.on("error", (err) => {
+        console.error(
+          `Consumer channel ${consumerId} error:`,
+          (err && (err as Error).message) || err
+        );
+      });
+    } catch (err) {
+      console.error(`Failed to start consumer ${consumerId} for ${queue}:`, err);
+      setTimeout(start, 2000);
+    }
+  }
+
+  start();
+}
+
+function safeAck(channel: amqp.Channel, msg: amqp.Message) {
   try {
-    const channel = await getChannel();
-    await channel.assertQueue(queue, { durable: true });
-
-    console.log(`Starting consumer for queue: ${queue}`);
-
-    await channel.consume(
-      queue,
-      async (msg) => {
-        if (!msg) return;
-
-        try {
-          const payload = JSON.parse(msg.content.toString());
-          await handler(payload, channel, msg); // Pass channel and msg
-        } catch (error) {
-          console.error(`Error processing message from ${queue}:`, error);
-          // Handle errors appropriately
-        }
-      },
-      { noAck: false } // Important: Manual acknowledgment
+    if (channel && (channel as any).connection) {
+      channel.ack(msg);
+    } else {
+      console.warn("Attempted to ack on closed channel — skipping");
+    }
+  } catch (err) {
+    console.warn(
+      "Failed to ack message (channel may be closed):",
+      (err && (err as Error).message) || err
     );
-  } catch (error) {
-    console.error(`Failed to start consumer for ${queue}:`, error);
-    setTimeout(() => consume(queue, handler), 5000);
   }
 }
 
-// Graceful shutdown handler
+function safeNack(channel: amqp.Channel, msg: amqp.Message, requeue = false) {
+  try {
+    if (channel && (channel as any).connection) {
+      channel.nack(msg, false, requeue);
+    } else {
+      console.warn("Attempted to nack on closed channel — skipping");
+    }
+  } catch (err) {
+    console.warn(
+      "Failed to nack message (channel may be closed):",
+      (err && (err as Error).message) || err
+    );
+  }
+}
+
+// Graceful shutdown handlers
 process.on("SIGTERM", async () => {
   console.log("SIGTERM received, closing RabbitMQ connections");
   await closeConnections();

@@ -1,4 +1,6 @@
+// =============================================
 // server/src/queue/webhookQueue.ts
+// =============================================
 import { publish, consume } from "./bus";
 import { webhookService } from "../services/webhooks";
 import { prisma } from "../config/db";
@@ -36,37 +38,60 @@ export async function queueWebhook(
   return publish(WEBHOOK_QUEUE, message);
 }
 
+/**
+ * Start the consumer for webhook deliveries.
+ * Uses consume() which creates a dedicated consumer channel and restarts on close.
+ */
 export async function startWebhookConsumer() {
-  await consume(WEBHOOK_QUEUE, async (message: WebhookMessage, channel: any, msg: any) => {
-    const result = await safeTry(async () => {
-      const webhook = await prisma.webhookSubscription.findUnique({
-        where: { id: message.webhookId },
-      });
+  await consume(
+    WEBHOOK_QUEUE,
+    async (message: WebhookMessage, channel: any, msg: any) => {
+      const context = `WebhookQueueConsumer-${message.webhookId}-${message.event}`;
 
-      if (!webhook || !webhook.active) {
-        console.log(`Webhook ${message.webhookId} not found or inactive - acknowledging message`);
-        channel.ack(msg); // ✅ CRITICAL: Acknowledge the message even if webhook not found
-        return;
+      const result = await safeTry(async () => {
+        const webhook = await prisma.webhookSubscription.findUnique({
+          where: { id: message.webhookId },
+        });
+
+        if (!webhook || !webhook.active) {
+          console.log(`Webhook ${message.webhookId} not found or inactive - will ack and drop`);
+          return;
+        }
+
+        await webhookService.deliverWithRetry(webhook, {
+          event: message.event,
+          data: message.data,
+        });
+
+        // On success we return; consume() will ack
+      }, context);
+
+      if (result.error) {
+        // Centralized error handling: decide to retry or DLQ
+        await handleWebhookError(result.error, message);
+        // consume() will nack for us (requeueOnError default false). But we persisted error/handled accordingly.
       }
-
-      await webhookService.deliverWithRetry(webhook, {
-        event: message.event,
-        data: message.data,
-      });
-
-      channel.ack(msg); // Acknowledge successful processing
-    }, "WebhookQueueConsumer");
-
-    if (result.error) {
-      await handleWebhookError(result.error, message);
-      channel.ack(msg); // Still acknowledge to prevent infinite retries
+    },
+    {
+      consumerId: "webhook.deliveries.consumer",
+      prefetch: Number(process.env.WEBHOOK_PREFETCH || 5),
+      requeueOnError: false, // don't requeue indefinitely
     }
-  });
+  );
 
-  // Start retry queue consumer
-  await consume(WEBHOOK_RETRY_QUEUE, async (message: WebhookMessage) => {
-    await publish(WEBHOOK_QUEUE, message);
-  });
+  // Also start retry queue consumer which republishes messages back to main queue with a delay logic
+  await consume(
+    WEBHOOK_RETRY_QUEUE,
+    async (message: WebhookMessage) => {
+      // simple republish to main queue; if you want delayed retry use TTL queues or setTimeout + publish
+      await publish(WEBHOOK_QUEUE, message);
+    },
+    {
+      consumerId: "webhook.retries.consumer",
+      prefetch: 1,
+      requeueOnError: false,
+    }
+  );
 }
 
 async function handleWebhookError(error: unknown, message: WebhookMessage): Promise<void> {
@@ -76,7 +101,6 @@ async function handleWebhookError(error: unknown, message: WebhookMessage): Prom
   // Log the error with context
   ErrorHandler.logError(error, `WebhookDelivery-${message.webhookId}`);
 
-  // Check if we should retry
   const shouldRetry = currentAttempt < maxAttempts && ErrorHandler.isRetryable(error);
 
   if (shouldRetry) {
@@ -93,11 +117,11 @@ async function scheduleRetry(
 ): Promise<void> {
   const nextAttempt = currentAttempt + 1;
   const retryMessage = { ...message, attempt: nextAttempt };
-  const delay = Math.pow(2, nextAttempt) * 1000;
+  const delay = Math.min(Math.pow(2, nextAttempt) * 1000, 60000);
 
   console.log(`Scheduling retry ${nextAttempt}/5 for webhook ${message.webhookId} in ${delay}ms`);
 
-  // Use setTimeout with error handling
+  // Using setTimeout to enqueue into retry queue after a delay
   setTimeout(async () => {
     try {
       await publish(WEBHOOK_RETRY_QUEUE, retryMessage);
@@ -126,7 +150,6 @@ async function moveToDeadLetterQueue(
       timestamp: new Date().toISOString(),
     });
   } catch (dlqError) {
-    // If we can't even publish to DLQ, log it critically
     ErrorHandler.logError(dlqError, "WebhookDLQCritical");
     console.error("CRITICAL: Failed to publish to dead letter queue:", {
       originalError: errorMessage,
@@ -134,77 +157,4 @@ async function moveToDeadLetterQueue(
       messageId: message.webhookId,
     });
   }
-}
-
-// Optional: Enhanced version with more detailed error handling
-export async function startWebhookConsumerEnhanced() {
-  await consume(WEBHOOK_QUEUE, async (message: WebhookMessage) => {
-    const context = `Webhook-${message.webhookId}-${message.event}`;
-
-    const result = await safeTry(async () => {
-      const webhook = await prisma.webhookSubscription.findUnique({
-        where: { id: message.webhookId },
-        include: {
-          deliveries: {
-            orderBy: { createdAt: "desc" },
-            take: 5,
-          },
-        },
-      });
-
-      if (!webhook) {
-        throw createAppError(`Webhook ${message.webhookId} not found`, {
-          code: "WEBHOOK_NOT_FOUND",
-          statusCode: 404,
-        });
-      }
-
-      if (!webhook.active) {
-        console.log(`Webhook ${message.webhookId} is inactive`);
-        return;
-      }
-
-      // Check if webhook is subscribed to this event
-      const webhookEvents = Array.isArray(webhook.events)
-        ? webhook.events
-        : JSON.parse(webhook.events as string);
-
-      if (!webhookEvents.includes(message.event)) {
-        console.log(`Webhook ${message.webhookId} not subscribed to event ${message.event}`);
-        return;
-      }
-
-      await webhookService.deliverWithRetry(webhook, {
-        event: message.event,
-        data: message.data,
-      });
-    }, context);
-
-    if (result.error) {
-      await handleWebhookError(result.error, message);
-    }
-  });
-
-  // Enhanced retry queue consumer with error handling
-  await consume(WEBHOOK_RETRY_QUEUE, async (message: WebhookMessage) => {
-    const result = await safeTry(async () => {
-      await publish(WEBHOOK_QUEUE, message);
-    }, "WebhookRetryConsumer");
-
-    if (result.error) {
-      ErrorHandler.logError(result.error, "WebhookRetryPublish");
-
-      // If retry publishing fails, try again with exponential backoff
-      const currentAttempt = message.attempt || 0;
-      if (currentAttempt < 10) {
-        const nextAttempt = currentAttempt + 1;
-        const retryMessage = { ...message, attempt: nextAttempt };
-        const delay = Math.pow(2, nextAttempt) * 1000;
-
-        setTimeout(async () => {
-          await publish(WEBHOOK_RETRY_QUEUE, retryMessage);
-        }, delay);
-      }
-    }
-  });
 }

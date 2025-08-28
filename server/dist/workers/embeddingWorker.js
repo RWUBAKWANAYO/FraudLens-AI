@@ -10,6 +10,9 @@ var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, P, ge
 };
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.startEmbeddingWorker = startEmbeddingWorker;
+// =============================================
+// server/src/workers/embeddingWorker.ts
+// =============================================
 const bus_1 = require("../queue/bus");
 const db_1 = require("../config/db");
 const aiEmbedding_1 = require("../services/aiEmbedding");
@@ -18,10 +21,12 @@ const redisPublisher_1 = require("../services/redisPublisher");
 const leakDetection_1 = require("../services/leakDetection");
 const connectionManager_1 = require("../queue/connectionManager");
 const errorHandler_1 = require("../utils/errorHandler");
+const redis_1 = require("../config/redis");
 const CONCURRENCY = Number(process.env.WORKER_CONCURRENCY || 8);
 const EMBED_BATCH = Number(process.env.EMBED_BATCH || 32);
 const MAX_RETRIES = 3;
 const HEALTH_CHECK_INTERVAL = 30000; // 30 seconds
+const UPLOAD_LOCK_TTL_SEC = 60 * 60; // 1 hour per upload (adjust as needed)
 // Store interval reference
 let healthCheckInterval;
 // Health check interval
@@ -44,25 +49,42 @@ process.on("SIGINT", () => {
         clearInterval(healthCheckInterval);
     }
 });
-// Health check interval
-setInterval(() => __awaiter(void 0, void 0, void 0, function* () {
-    try {
-        const isHealthy = yield (0, connectionManager_1.checkConnectionHealth)();
-        if (!isHealthy) {
-            console.warn("RabbitMQ connection unhealthy, attempting to reconnect...");
-            // The connection manager will handle reconnection automatically
-        }
-    }
-    catch (error) {
-        console.error("Health check failed:", error);
-    }
-}), HEALTH_CHECK_INTERVAL);
 function startEmbeddingWorker() {
     return __awaiter(this, void 0, void 0, function* () {
-        console.log("Starting embedding worker with connection resilience...");
-        yield (0, bus_1.consume)("embeddings.generate", (payload) => __awaiter(this, void 0, void 0, function* () {
+        console.log("Starting embedding worker with idempotency & centralized ACKs...");
+        yield (0, bus_1.consume)("embeddings.generate", (payload, _channel, _msg) => __awaiter(this, void 0, void 0, function* () {
+            const { recordIds, companyId, uploadId, originalFileName } = payload;
+            if (!uploadId || !companyId) {
+                console.warn("Missing uploadId/companyId; skipping.");
+                return; // centralized ACK will ack the message
+            }
+            // 🔐 Idempotency 1: Skip if upload already completed
+            const upload = yield db_1.prisma.upload.findUnique({ where: { id: uploadId } });
+            if (!upload) {
+                console.warn(`Upload ${uploadId} not found; skipping.`);
+                return;
+            }
+            if (upload.status === "completed") {
+                console.log(`Upload ${uploadId} already completed; skipping.`);
+                return;
+            }
+            if (upload.status === "processing") {
+                console.log(`Upload ${uploadId} already processing; skipping.`);
+                return;
+            }
+            // 🔐 Idempotency 2: Acquire a distributed lock to ensure single processing
+            const lockKey = `lock:upload:${uploadId}`;
+            const lockToken = yield (0, redis_1.acquireLock)(lockKey, UPLOAD_LOCK_TTL_SEC);
+            if (!lockToken) {
+                console.log(`Could not acquire lock for ${uploadId}; another worker is processing.`);
+                return;
+            }
             try {
-                const { recordIds, companyId, uploadId, originalFileName } = payload;
+                // Mark upload as processing
+                yield db_1.prisma.upload.update({
+                    where: { id: uploadId },
+                    data: { status: "processing", startedAt: new Date(), error: null },
+                });
                 console.log(`Processing upload ${uploadId}, ${recordIds.length} records`);
                 yield redisPublisher_1.redisPublisher.publishUploadProgress(companyId, uploadId, 0, "queued", "Upload queued for processing", {
                     totalRecords: recordIds.length,
@@ -74,37 +96,54 @@ function startEmbeddingWorker() {
                 // Run leak detection
                 yield runLeakDetection(companyId, uploadId);
                 console.log(`Successfully processed upload ${uploadId}`);
+                // Mark upload as completed
+                yield db_1.prisma.upload.update({
+                    where: { id: uploadId },
+                    data: { status: "completed", completedAt: new Date() },
+                });
             }
             catch (error) {
-                console.error(`Failed to process upload:`, error);
-                // Try to get uploadId from error or payload
-                const uploadId = (payload === null || payload === void 0 ? void 0 : payload.uploadId) || "unknown";
-                const companyId = (payload === null || payload === void 0 ? void 0 : payload.companyId) || "unknown";
+                console.error(`Failed to process upload ${uploadId}:`, error);
+                // Publish error to clients
                 yield redisPublisher_1.redisPublisher.publishUploadError(companyId, uploadId, errorHandler_1.ErrorHandler.getErrorMessage(error));
-                // Don't nack for connection errors to avoid infinite retries during outages
-                if (error instanceof Error && error.message.includes("ECONNRESET")) {
-                    console.log("Connection error, message will be dead-lettered");
-                    // Message will be handled by the bus layer
+                // Record failure in DB (don’t requeue; we’ll keep a record)
+                yield db_1.prisma.upload.update({
+                    where: { id: uploadId },
+                    data: {
+                        status: "failed",
+                        error: errorHandler_1.ErrorHandler.getErrorMessage(error),
+                    },
+                });
+                // Re-throwing would NACK the message (centralized) -> duplicate later.
+                // We return to ACK and avoid reprocessing old work on restart.
+                return;
+            }
+            finally {
+                // Always release the distributed lock
+                try {
+                    yield (0, redis_1.releaseLock)(lockKey, lockToken);
                 }
-                else {
-                    // Application error, retry later
-                    throw error;
+                catch (e) {
+                    console.warn(`Failed to release lock for ${uploadId}:`, e);
                 }
             }
-        }));
+        }), {
+            // Don’t requeue on error; we persist failure status and avoid duplicates
+            requeueOnError: false,
+        });
     });
 }
 function processEmbeddingsWithProgress(recordIds, companyId, uploadId) {
     return __awaiter(this, void 0, void 0, function* () {
-        // Fix: Explicitly type the batches array
+        // Create batches
         const batches = [];
         for (let i = 0; i < recordIds.length; i += EMBED_BATCH) {
             batches.push(recordIds.slice(i, i + EMBED_BATCH));
         }
         yield redisPublisher_1.redisPublisher.publishUploadProgress(companyId, uploadId, 10, "embeddings", "Starting embedding generation", { totalBatches: batches.length });
         for (const [batchIndex, batch] of batches.entries()) {
-            const progress = 10 + Math.round((batchIndex / batches.length) * 40);
-            yield redisPublisher_1.redisPublisher.publishUploadProgress(companyId, uploadId, progress, "embeddings", `Processing batch ${batchIndex + 1}/${batches.length}`, {
+            const progress = 10 + Math.round(((batchIndex + 1) / batches.length) * 40);
+            yield redisPublisher_1.redisPublisher.publishUploadProgress(companyId, uploadId, Math.min(progress, 50), "embeddings", `Processing batch ${batchIndex + 1}/${batches.length}`, {
                 currentBatch: batchIndex + 1,
                 totalBatches: batches.length,
                 recordsInBatch: batch.length,

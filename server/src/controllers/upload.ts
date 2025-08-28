@@ -1,6 +1,7 @@
 // server/src/controllers/upload.ts
 import { Request, Response, NextFunction } from "express";
 import { prisma } from "../config/db";
+import { Record } from "@prisma/client";
 import { parseBuffer } from "../services/fileParser";
 import { detectLeaks } from "../services/leakDetection";
 import crypto from "crypto";
@@ -279,10 +280,10 @@ export async function handleFileUpload(req: Request, res: Response, next: NextFu
 }
 
 // Optimized embedding generation with batching
-async function generateEmbeddingsForRecords(records: any[]) {
+async function generateEmbeddingsForRecords(records: Record[]) {
   console.log(`Generating embeddings for ${records.length} records`);
 
-  const batches = [];
+  const batches: Record[][] = [];
   for (let i = 0; i < records.length; i += EMBED_BATCH) {
     batches.push(records.slice(i, i + EMBED_BATCH));
   }

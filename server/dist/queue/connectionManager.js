@@ -1,4 +1,8 @@
 "use strict";
+// =============================================
+// server/src/queue/connectionManager.ts
+// =============================================
+// @ts-nocheck
 var __createBinding = (this && this.__createBinding) || (Object.create ? (function(o, m, k, k2) {
     if (k2 === undefined) k2 = k;
     var desc = Object.getOwnPropertyDescriptor(m, k);
@@ -42,171 +46,243 @@ var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, P, ge
     });
 };
 Object.defineProperty(exports, "__esModule", { value: true });
+exports.getConnection = getConnection;
 exports.getChannel = getChannel;
-exports.closeConnections = closeConnections;
+exports.createConsumerChannel = createConsumerChannel;
 exports.checkConnectionHealth = checkConnectionHealth;
+exports.closeConnections = closeConnections;
 exports.gracefulShutdown = gracefulShutdown;
-// server/src/queue/connectionManager.ts
 const amqp = __importStar(require("amqplib"));
-let conn = null;
-let ch = null;
+let connection = null;
+let publisherChannel = null;
+const consumerChannels = new Map();
 let isConnecting = false;
 let reconnectAttempts = 0;
-const MAX_RECONNECT_ATTEMPTS = 10;
-const RECONNECT_DELAY = 5000;
-// Add this flag to prevent reconnection during shutdown
+const MAX_RECONNECT_ATTEMPTS = Number(process.env.RABBIT_MAX_RECONNECT || 10);
+const BASE_RECONNECT_DELAY = Number(process.env.RABBIT_RECONNECT_BASE_MS || 1000);
 let isShuttingDown = false;
-// Connection state monitoring
+// Connection state
 let connectionState = "disconnected";
-function getChannel() {
+function getConnection() {
     return __awaiter(this, void 0, void 0, function* () {
-        if (ch && connectionState === "connected") {
-            return ch;
+        if (connection && connection.connection && connectionState === "connected") {
+            return connection;
         }
         if (isConnecting) {
-            // Wait for ongoing connection attempt
-            yield new Promise((resolve) => setTimeout(resolve, 1000));
-            if (ch && connectionState === "connected")
-                return ch;
+            yield new Promise((r) => setTimeout(r, 500));
+            if (connection && connection.connection && connectionState === "connected")
+                return connection;
         }
         return yield establishConnection();
     });
 }
 function establishConnection() {
     return __awaiter(this, void 0, void 0, function* () {
-        if (isConnecting || isShuttingDown) {
-            yield new Promise((resolve) => setTimeout(resolve, 1000));
-            if (ch)
-                return ch;
-            throw new Error("Connection attempt aborted during shutdown");
+        if (isConnecting) {
+            yield new Promise((r) => setTimeout(r, 500));
+            if (connection && connectionState === "connected")
+                return connection;
         }
+        if (isShuttingDown)
+            throw new Error("Shutting down; not creating new connections");
         isConnecting = true;
         connectionState = "connecting";
         try {
             const url = process.env.RABBIT_URL;
             if (!url)
                 throw new Error("RABBIT_URL is not set");
-            console.log("Connecting to RabbitMQ...");
-            // Close existing connection if any
-            yield closeConnections();
-            // Connect without type casting first
-            const connection = yield amqp.connect(url);
-            // Now cast to our custom type
-            conn = connection;
-            // Enhanced error handling
-            conn.on("error", (error) => {
-                console.error("RabbitMQ connection error:", error.message);
+            const conn = yield amqp.connect(url);
+            conn.on("error", (err) => {
+                // amqplib emits 'error' on connection; log and trigger reconnection
+                console.error("RabbitMQ connection error:", err && err.message);
                 connectionState = "disconnected";
-                if (!isShuttingDown) {
-                    scheduleReconnection();
-                }
+                scheduleReconnect();
             });
             conn.on("close", () => {
-                console.log("RabbitMQ connection closed");
+                console.warn("RabbitMQ connection closed");
                 connectionState = "disconnected";
-                if (!isShuttingDown) {
-                    scheduleReconnection();
-                }
+                scheduleReconnect();
             });
-            // Create channel
-            const channel = yield conn.createChannel();
-            ch = channel;
-            // Channel error handling
-            ch.on("error", (error) => {
-                console.error("RabbitMQ channel error:", error.message);
-            });
-            ch.on("close", () => {
-                console.log("RabbitMQ channel closed");
-            });
-            yield ch.prefetch(Number(process.env.WORKER_PREFETCH || 8));
-            console.log("RabbitMQ connected successfully");
+            connection = conn;
             connectionState = "connected";
             reconnectAttempts = 0;
             isConnecting = false;
-            return ch;
+            console.log("RabbitMQ connection established");
+            return connection;
         }
-        catch (error) {
+        catch (err) {
             isConnecting = false;
             connectionState = "disconnected";
-            console.error("Failed to connect to RabbitMQ:", error);
-            if (!isShuttingDown) {
-                scheduleReconnection();
+            reconnectAttempts++;
+            console.error(`Failed to connect to RabbitMQ (attempt ${reconnectAttempts}):`, err);
+            if (!isShuttingDown && reconnectAttempts < MAX_RECONNECT_ATTEMPTS) {
+                const delay = Math.min(BASE_RECONNECT_DELAY * Math.pow(2, reconnectAttempts - 1), 30000);
+                console.log(`Retrying RabbitMQ connect in ${delay}ms`);
+                setTimeout(() => establishConnection().catch(console.error), delay);
             }
-            throw error;
+            throw err;
         }
     });
 }
-function scheduleReconnection() {
-    if (isShuttingDown || reconnectAttempts >= MAX_RECONNECT_ATTEMPTS) {
-        if (reconnectAttempts >= MAX_RECONNECT_ATTEMPTS) {
-            console.error("Max reconnection attempts reached. Giving up.");
-        }
+function scheduleReconnect() {
+    if (isShuttingDown)
+        return;
+    if (reconnectAttempts >= MAX_RECONNECT_ATTEMPTS) {
+        console.error("Max RabbitMQ reconnection attempts reached");
         return;
     }
     reconnectAttempts++;
-    const delay = Math.min(RECONNECT_DELAY * Math.pow(2, reconnectAttempts - 1), 30000);
+    const delay = Math.min(BASE_RECONNECT_DELAY * Math.pow(2, reconnectAttempts - 1), 30000);
     console.log(`Scheduling reconnection attempt ${reconnectAttempts} in ${delay}ms`);
-    setTimeout(() => {
-        if (!isConnecting && connectionState !== "connected" && !isShuttingDown) {
-            establishConnection().catch(console.error);
-        }
-    }, delay);
+    setTimeout(() => establishConnection().catch(console.error), delay);
 }
-function closeConnections() {
+/**
+ * Return a publisher channel (single long-lived channel used for publishing).
+ * If channel is closed, a new one is created.
+ */
+function getChannel() {
     return __awaiter(this, void 0, void 0, function* () {
-        isConnecting = false;
-        connectionState = "disconnected";
-        isShuttingDown = true; // Prevent reconnections
-        if (ch) {
-            try {
-                yield ch.close();
+        try {
+            if (publisherChannel && publisherChannel.connection) {
+                return publisherChannel;
             }
-            catch (error) {
-                console.warn("Error closing channel:", error);
-            }
-            finally {
-                ch = null;
-            }
+            const conn = yield getConnection();
+            publisherChannel = yield conn.createChannel();
+            // publisher channel error/close handlers: close and allow recreation
+            publisherChannel.on("error", (err) => {
+                console.error("Publisher channel error:", (err && err.message) || err);
+                try {
+                    publisherChannel && publisherChannel.close().catch(() => { });
+                }
+                finally {
+                    publisherChannel = null;
+                }
+            });
+            publisherChannel.on("close", () => {
+                console.warn("Publisher channel closed");
+                publisherChannel = null;
+            });
+            return publisherChannel;
         }
-        if (conn) {
-            try {
-                yield conn.close();
-            }
-            catch (error) {
-                console.warn("Error closing connection:", error);
-            }
-            finally {
-                conn = null;
-            }
+        catch (err) {
+            publisherChannel = null;
+            throw err;
         }
     });
 }
-// Enhanced health check
+/**
+ * Create (and return) a fresh consumer channel for a single consumer.
+ * Consumer channel should be used exclusively by that consumer.
+ */
+function createConsumerChannel(consumerId_1) {
+    return __awaiter(this, arguments, void 0, function* (consumerId, prefetch = Number(process.env.WORKER_PREFETCH || 8)) {
+        // If we already have one for this id and it's open, return it
+        const existing = consumerChannels.get(consumerId);
+        if (existing && existing.connection) {
+            return existing;
+        }
+        const conn = yield getConnection();
+        const ch = yield conn.createChannel();
+        if (prefetch > 0) {
+            yield ch.prefetch(prefetch);
+        }
+        ch.on("error", (err) => {
+            console.error(`Consumer channel (${consumerId}) error:`, (err && err.message) || err);
+        });
+        ch.on("close", () => {
+            console.warn(`Consumer channel (${consumerId}) closed`);
+            consumerChannels.set(consumerId, null);
+        });
+        consumerChannels.set(consumerId, ch);
+        return ch;
+    });
+}
+/**
+ * Health check for current connection & channels.
+ */
 function checkConnectionHealth() {
     return __awaiter(this, void 0, void 0, function* () {
         try {
-            if (connectionState !== "connected" || !conn || !ch)
+            if (!connection || connectionState !== "connected")
                 return false;
-            // Quick ping test
-            yield ch.assertQueue("health_check", {
-                durable: false,
-                autoDelete: true,
-                messageTtl: 1000,
-            });
-            yield ch.deleteQueue("health_check");
-            return true;
+            // Try a lightweight operation: create a temporary channel, assert/delete a temporary queue
+            const ch = yield connection.createChannel();
+            try {
+                const q = `health_check_${Date.now()}_${Math.floor(Math.random() * 1000)}`;
+                yield ch.assertQueue(q, { durable: false, autoDelete: true, messageTtl: 1000 });
+                yield ch.deleteQueue(q);
+                yield ch.close();
+                return true;
+            }
+            catch (err) {
+                try {
+                    yield ch.close();
+                }
+                catch (_) { }
+                return false;
+            }
         }
-        catch (error) {
-            console.warn("Connection health check failed:", error);
+        catch (err) {
             return false;
         }
     });
 }
-// Graceful shutdown
+/**
+ * Close channels and connection gracefully.
+ */
+function closeConnections() {
+    return __awaiter(this, void 0, void 0, function* () {
+        isShuttingDown = true;
+        // Close consumer channels
+        yield Promise.allSettled(Array.from(consumerChannels.values()).map((ch) => __awaiter(this, void 0, void 0, function* () {
+            if (ch && ch.close) {
+                try {
+                    yield ch.close();
+                }
+                catch (e) {
+                    console.warn("Error closing consumer channel:", e);
+                }
+            }
+        })));
+        consumerChannels.clear();
+        // Close publisher channel
+        if (publisherChannel) {
+            try {
+                yield publisherChannel.close();
+            }
+            catch (e) {
+                console.warn("Error closing publisher channel:", e);
+            }
+            publisherChannel = null;
+        }
+        if (connection) {
+            try {
+                yield connection.close();
+            }
+            catch (e) {
+                console.warn("Error closing connection:", e);
+            }
+            connection = null;
+        }
+        connectionState = "disconnected";
+        isConnecting = false;
+    });
+}
+/**
+ * Graceful shutdown helper for process signals
+ */
 function gracefulShutdown() {
     return __awaiter(this, void 0, void 0, function* () {
-        console.log("Performing graceful shutdown of RabbitMQ connections...");
-        isShuttingDown = true; // Prevent any reconnection attempts
+        console.log("Performing graceful RabbitMQ shutdown...");
+        isShuttingDown = true;
         yield closeConnections();
     });
 }
+exports.default = {
+    getConnection,
+    getChannel,
+    createConsumerChannel,
+    checkConnectionHealth,
+    closeConnections,
+    gracefulShutdown,
+};

@@ -1,5 +1,8 @@
+// =============================================
 // config/redis.ts
+// =============================================
 import { createClient, RedisClientType } from "redis";
+import { randomBytes } from "crypto";
 
 let redisClient: RedisClientType | null = null;
 let pubClient: RedisClientType | null = null;
@@ -156,7 +159,33 @@ export async function checkRedisHealth(): Promise<boolean> {
     const client = await getRedis();
     await client.ping();
     return true;
-  } catch (error) {
+  } catch {
     return false;
   }
+}
+
+/**
+ * Acquire a simple distributed lock using SET NX EX.
+ * @returns a random token string if acquired, otherwise null.
+ */
+export async function acquireLock(key: string, ttlSeconds: number): Promise<string | null> {
+  const client = await getRedis();
+  const token = randomBytes(16).toString("hex");
+  const res = await client.set(key, token, { NX: true, EX: ttlSeconds });
+  return res === "OK" ? token : null;
+}
+
+/**
+ * Release lock safely (only owner can release).
+ */
+export async function releaseLock(key: string, token: string): Promise<void> {
+  const client = await getRedis();
+  const script = `
+    if redis.call("GET", KEYS[1]) == ARGV[1] then
+      return redis.call("DEL", KEYS[1])
+    else
+      return 0
+    end
+  `;
+  await client.eval(script, { keys: [key], arguments: [token] });
 }

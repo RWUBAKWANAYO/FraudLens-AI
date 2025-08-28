@@ -82,19 +82,25 @@ model Invitation {
 }
 
 model Upload {
-  id        String   @id @default(uuid())
-  companyId String
-  fileName  String
-  fileType  String
-  source    String   @default("batch")
-  fileHash  String?
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-  records   Record[]
-  threats   Threat[]
-  company   Company  @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  id          String    @id @default(uuid())
+  companyId   String
+  fileName    String
+  fileType    String
+  source      String    @default("batch")
+  fileHash    String?
+  status      String    @default("pending")
+  startedAt   DateTime?
+  completedAt DateTime?
+  error       String?
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+  records     Record[]
+  threats     Threat[]
+  company     Company   @relation(fields: [companyId], references: [id], onDelete: Cascade)
 
   @@index([companyId, fileHash, createdAt])
+  @@index([status])
+  @@index([createdAt])
 }
 
 model Record {
