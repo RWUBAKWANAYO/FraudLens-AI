@@ -181,6 +181,47 @@ export async function parsePDFBuffer(buffer: Buffer): Promise<Parsed[]> {
   return rows;
 }
 
+export async function parseJsonBuffer(buffer: Buffer): Promise<Parsed[]> {
+  try {
+    const jsonString = buffer.toString("utf8");
+    const jsonData = JSON.parse(jsonString);
+
+    const dataArray = Array.isArray(jsonData) ? jsonData : [jsonData];
+
+    return dataArray.map((item: any, index: number) => {
+      const amount =
+        typeof item.amount === "string"
+          ? parseFloat(item.amount.replace(/[^\d.-]/g, ""))
+          : Number(item.amount) || 0;
+
+      const date = item.date ? new Date(item.date).toISOString() : undefined;
+
+      return {
+        txId: item.txId || `json-file-${Date.now()}-${index}`,
+        partner: item.partner || undefined,
+        amount,
+        date,
+        email: item.email || undefined,
+        currency: item.currency || "USD",
+        description: item.description || undefined,
+        status: item.status || undefined,
+        user_id: item.user_id || undefined,
+        account: item.account || undefined,
+        card: item.card || undefined,
+        bank_account: item.bank_account || undefined,
+        account_number: item.account_number || undefined,
+        ip: item.ip || undefined,
+        device: item.device || undefined,
+        raw: item,
+        embeddingJson: null,
+      };
+    });
+  } catch (error) {
+    console.error("Error parsing JSON file:", error);
+    throw new Error("Invalid JSON file format");
+  }
+}
+
 export async function parseBuffer(buffer: Buffer, fileName: string): Promise<Parsed[]> {
   const ext = fileName.split(".").pop()?.toLowerCase();
   if (!ext) return [];
@@ -188,6 +229,7 @@ export async function parseBuffer(buffer: Buffer, fileName: string): Promise<Par
     if (ext === "csv" || ext === "txt") return await parseCSVBuffer(buffer);
     if (ext === "xlsx" || ext === "xls") return await parseExcelBuffer(buffer);
     if (ext === "pdf") return await parsePDFBuffer(buffer);
+    if (ext === "json") return await parseJsonBuffer(buffer);
   } catch (error) {
     console.error(`Error parsing ${ext} file:`, error);
     return [{ raw: { content: buffer.toString("utf8") }, embeddingJson: null }];

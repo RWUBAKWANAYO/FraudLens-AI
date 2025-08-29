@@ -22,7 +22,12 @@ export default function RuleManager({ companyId }: { companyId: string }) {
     try {
       // This endpoint would need to be implemented in your backend
       const response = await fetch(
-        `${process.env.NEXT_PUBLIC_SERVER_URL}/audit/rules?companyId=${companyId}`
+        `${process.env.NEXT_PUBLIC_SERVER_URL}/audit/rules?companyId=${companyId}`,
+        {
+          headers: {
+            Authorization: process.env.NEXT_PUBLIC_API_KEY!,
+          },
+        }
       );
       const data = await response.json();
       setRules(data);

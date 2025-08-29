@@ -11,15 +11,29 @@ var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, P, ge
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.handleFileUpload = handleFileUpload;
 const uploadProcessor_1 = require("../services/uploadProcessor");
+const jsonProcessor_1 = require("../services/jsonProcessor");
+const errorHandler_1 = require("../utils/errorHandler");
 function handleFileUpload(req, res, next) {
     return __awaiter(this, void 0, void 0, function* () {
         try {
-            if (!req.file) {
-                return res.status(400).json({ error: "No file uploaded" });
-            }
             const companyId = req.user.companyId || null;
             if (!companyId) {
                 return res.status(400).json({ error: "Missing companyId" });
+            }
+            if (req.body.jsonData) {
+                try {
+                    const jsonData = typeof req.body.jsonData === "string" ? JSON.parse(req.body.jsonData) : req.body.jsonData;
+                    const result = yield (0, jsonProcessor_1.processJsonData)(jsonData, companyId, req.body.fileName || "direct-upload.json");
+                    return res.json(result);
+                }
+                catch (jsonError) {
+                    return res
+                        .status(400)
+                        .json({ error: "Invalid JSON data", details: errorHandler_1.ErrorHandler.getErrorMessage(jsonError) });
+                }
+            }
+            if (!req.file) {
+                return res.status(400).json({ error: "No file uploaded" });
             }
             const result = yield (0, uploadProcessor_1.processUpload)(req.file, companyId);
             res.json(result);

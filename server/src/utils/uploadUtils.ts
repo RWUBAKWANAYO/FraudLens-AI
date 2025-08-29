@@ -66,7 +66,7 @@ export function mkRecordSignature(args: {
 
 export function validateFileExtension(fileName: string): void {
   const ext = fileName.split(".").pop()?.toLowerCase();
-  const allowedExtensions = ["csv", "xlsx", "xls", "pdf", "txt"];
+  const allowedExtensions = ["csv", "xlsx", "xls", "json"];
 
   if (!ext || !allowedExtensions.includes(ext)) {
     throw new Error("Unsupported file format. Upload CSV/Excel/PDF only.");

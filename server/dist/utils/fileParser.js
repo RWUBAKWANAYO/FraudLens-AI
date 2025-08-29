@@ -48,6 +48,7 @@ Object.defineProperty(exports, "__esModule", { value: true });
 exports.parseCSVBuffer = parseCSVBuffer;
 exports.parseExcelBuffer = parseExcelBuffer;
 exports.parsePDFBuffer = parsePDFBuffer;
+exports.parseJsonBuffer = parseJsonBuffer;
 exports.parseBuffer = parseBuffer;
 const csv_parser_1 = __importDefault(require("csv-parser"));
 const XLSX = __importStar(require("xlsx"));
@@ -186,6 +187,44 @@ function parsePDFBuffer(buffer) {
         return rows;
     });
 }
+function parseJsonBuffer(buffer) {
+    return __awaiter(this, void 0, void 0, function* () {
+        try {
+            const jsonString = buffer.toString("utf8");
+            const jsonData = JSON.parse(jsonString);
+            const dataArray = Array.isArray(jsonData) ? jsonData : [jsonData];
+            return dataArray.map((item, index) => {
+                const amount = typeof item.amount === "string"
+                    ? parseFloat(item.amount.replace(/[^\d.-]/g, ""))
+                    : Number(item.amount) || 0;
+                const date = item.date ? new Date(item.date).toISOString() : undefined;
+                return {
+                    txId: item.txId || `json-file-${Date.now()}-${index}`,
+                    partner: item.partner || undefined,
+                    amount,
+                    date,
+                    email: item.email || undefined,
+                    currency: item.currency || "USD",
+                    description: item.description || undefined,
+                    status: item.status || undefined,
+                    user_id: item.user_id || undefined,
+                    account: item.account || undefined,
+                    card: item.card || undefined,
+                    bank_account: item.bank_account || undefined,
+                    account_number: item.account_number || undefined,
+                    ip: item.ip || undefined,
+                    device: item.device || undefined,
+                    raw: item,
+                    embeddingJson: null,
+                };
+            });
+        }
+        catch (error) {
+            console.error("Error parsing JSON file:", error);
+            throw new Error("Invalid JSON file format");
+        }
+    });
+}
 function parseBuffer(buffer, fileName) {
     return __awaiter(this, void 0, void 0, function* () {
         var _a;
@@ -199,6 +238,8 @@ function parseBuffer(buffer, fileName) {
                 return yield parseExcelBuffer(buffer);
             if (ext === "pdf")
                 return yield parsePDFBuffer(buffer);
+            if (ext === "json")
+                return yield parseJsonBuffer(buffer);
         }
         catch (error) {
             console.error(`Error parsing ${ext} file:`, error);

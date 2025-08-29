@@ -17,7 +17,7 @@ interface Company {
 
 // Use the seeded company IDs directly
 const SEEDED_COMPANIES: Company[] = [
-  { id: "04e75f80-a2d9-418d-92e9-057eec3b76b1", name: "Nayo Group", slug: "nayo-inc" },
+  { id: "a0b49a62-3a08-4e84-b126-134da675e048", name: "Nayo Group", slug: "nayo-inc" },
   { id: "04e75f80-a2d9-418d-92e9-057eec3b76475", name: "Globex Inc", slug: "globex-inc" },
   {
     id: "741ea1e3-00a5-4a3b-aec6-392fb99d5b8e",
