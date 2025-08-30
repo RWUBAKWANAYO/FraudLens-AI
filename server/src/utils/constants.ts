@@ -1,3 +1,5 @@
+import { Prisma } from "@prisma/client";
+
 export const SEVERITY = { HIGH: "high", MEDIUM: "medium", LOW: "low" } as const;
 
 export const RULE = {
@@ -32,3 +34,41 @@ export const THREAT_TYPE_MAP: Record<string, string> = {
 export const WEBHOOK_QUEUE = "webhook.deliveries";
 export const WEBHOOK_RETRY_QUEUE = "webhook.retries";
 export const WEBHOOK_DLQ = "webhook.dead_letter";
+
+export const THREAT_INCLUDE = {
+  record: true,
+  upload: {
+    select: {
+      fileName: true,
+      createdAt: true,
+    },
+  },
+} satisfies Prisma.ThreatInclude;
+
+export const VALID_THREAT_SORT_FIELDS = [
+  "createdAt",
+  "updatedAt",
+  "confidenceScore",
+  "status",
+  "threatType",
+];
+
+export const ALERT_INCLUDE = {
+  threat: {
+    select: {
+      threatType: true,
+      confidenceScore: true,
+      status: true,
+    },
+  },
+  record: {
+    select: {
+      txId: true,
+      partner: true,
+      amount: true,
+      currency: true,
+    },
+  },
+} satisfies Prisma.AlertInclude;
+
+export const VALID_ALERT_SORT_FIELDS = ["createdAt", "updatedAt", "severity", "delivered"];

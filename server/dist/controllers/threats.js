@@ -11,23 +11,45 @@ var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, P, ge
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.listThreats = listThreats;
 exports.getThreatDetails = getThreatDetails;
-const db_1 = require("../config/db");
+const threatService_1 = require("../services/threatService");
+const queryBuilder_1 = require("../utils/queryBuilder");
+const errorHandler_1 = require("../utils/errorHandler");
 const leakExplanation_1 = require("../services/leakExplanation");
+const db_1 = require("../config/db");
 function listThreats(req, res) {
     return __awaiter(this, void 0, void 0, function* () {
+        const companyId = req.user.companyId;
+        if (!companyId) {
+            return res.status(400).json({ error: "Missing companyId" });
+        }
         try {
-            const { companyId } = req.query;
-            const threats = yield db_1.prisma.threat.findMany({
-                where: { companyId: companyId },
-                include: { record: true },
-                orderBy: { createdAt: "desc" },
-                take: 100,
-            });
-            res.json(threats);
+            const queryCompanyId = queryBuilder_1.QueryBuilder.validateCompanyId(companyId);
+            const queryParams = {
+                status: req.query.status,
+                threatType: req.query.threatType,
+                recordId: req.query.recordId,
+                uploadId: req.query.uploadId,
+                search: req.query.search,
+                sortBy: req.query.sortBy,
+                sortOrder: req.query.sortOrder,
+                page: parseInt(req.query.page) || 1,
+                limit: parseInt(req.query.limit) || 50,
+            };
+            if (req.query.confidenceMin) {
+                queryParams.confidenceMin = parseFloat(req.query.confidenceMin);
+            }
+            if (req.query.confidenceMax) {
+                queryParams.confidenceMax = parseFloat(req.query.confidenceMax);
+            }
+            if (req.query.startDate)
+                queryParams.startDate = req.query.startDate;
+            if (req.query.endDate)
+                queryParams.endDate = req.query.endDate;
+            const result = yield threatService_1.ThreatService.findMany(queryCompanyId, queryParams);
+            res.json(result);
         }
         catch (error) {
-            console.log(error);
-            res.status(500).json({ error: "Failed to fetch threats" });
+            (0, errorHandler_1.handleError)(error, res);
         }
     });
 }
@@ -36,12 +58,9 @@ function getThreatDetails(req, res) {
         var _a, _b, _c;
         try {
             const { threatId } = req.params;
-            const threat = yield db_1.prisma.threat.findUnique({
-                where: { id: threatId },
-                include: { record: true },
-            });
+            const threat = yield threatService_1.ThreatService.findById(threatId);
             if (!threat) {
-                return res.status(404).json({ error: "Threat not found" });
+                throw new errorHandler_1.ValidationError("Threat not found");
             }
             const metadata = threat.metadata;
             if (metadata === null || metadata === void 0 ? void 0 : metadata.aiExplanation) {
@@ -87,8 +106,7 @@ function getThreatDetails(req, res) {
             });
         }
         catch (error) {
-            console.error("Failed to get threat details:", error);
-            res.status(500).json({ error: "Failed to generate detailed analysis" });
+            (0, errorHandler_1.handleError)(error, res);
         }
     });
 }

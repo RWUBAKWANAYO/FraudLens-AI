@@ -1,6 +1,7 @@
-// utils/errorHandler.ts
+import { Response } from "express";
+
 import {
-  AppError,
+  AppError as AppErrorType,
   isAppError,
   isHttpError,
   isDatabaseError,
@@ -54,23 +55,19 @@ export class ErrorHandler {
   }
 
   static isRetryable(error: unknown): boolean {
-    // Network errors (timeouts, connection resets)
     if (isNetworkError(error)) {
       return true;
     }
 
-    // HTTP 5xx errors (server errors)
     const statusCode = this.getStatusCode(error);
     if (statusCode && statusCode >= 500 && statusCode < 600) {
       return true;
     }
 
-    // HTTP 429 (rate limiting)
     if (statusCode === 429) {
       return true;
     }
 
-    // Database connection errors
     if (isDatabaseError(error)) {
       const retryableCodes = [
         "ECONNRESET",
@@ -99,7 +96,7 @@ export class ErrorHandler {
     });
   }
 
-  static toAppError(error: unknown): AppError {
+  static toAppError(error: unknown): AppErrorType {
     if (isAppError(error)) {
       return error;
     }
@@ -127,13 +124,6 @@ export class ErrorHandler {
   }
 }
 
-// Global error handling function
-export function handleError(error: unknown, context?: string): never {
-  ErrorHandler.logError(error, context);
-  throw ErrorHandler.toAppError(error);
-}
-
-// Safe try-catch wrapper
 export async function safeTry<T>(
   operation: () => Promise<T>,
   context?: string
@@ -142,8 +132,52 @@ export async function safeTry<T>(
     const data = await operation();
     return { data, error: null };
   } catch (error) {
-    const appError = ErrorHandler.toAppError(error);
+    const appError = ErrorHandler.toAppError(error) as any;
     ErrorHandler.logError(appError, context);
     return { data: null, error: appError };
   }
 }
+
+export class AppError extends Error {
+  constructor(
+    public readonly message: string,
+    public readonly statusCode: number = 500,
+    public readonly details?: any
+  ) {
+    super(message);
+    this.name = this.constructor.name;
+    Error.captureStackTrace(this, this.constructor);
+  }
+}
+
+export class ValidationError extends AppError {
+  constructor(message: string, details?: any) {
+    super(message, 400, details);
+  }
+}
+
+export class NotFoundError extends AppError {
+  constructor(resource: string, id?: string) {
+    super(`${resource}${id ? ` with id ${id}` : ""} not found`, 404);
+  }
+}
+
+export const handleError = (error: unknown, res: Response) => {
+  console.error("Error:", error);
+
+  if (error instanceof AppError) {
+    return res.status(error.statusCode).json({
+      error: error.message,
+      ...(error.details && { details: error.details }),
+    });
+  }
+
+  if (error instanceof Error) {
+    return res.status(500).json({
+      error: "Internal server error",
+      message: process.env.NODE_ENV === "development" ? error.message : undefined,
+    });
+  }
+
+  res.status(500).json({ error: "Internal server error" });
+};

@@ -1,20 +1,46 @@
 import { Request, Response } from "express";
-import { prisma } from "../config/db";
+import { ThreatService } from "../services/threatService";
+import { ThreatQueryParams } from "../types/threat";
+import { QueryBuilder } from "../utils/queryBuilder";
+import { handleError, ValidationError } from "../utils/errorHandler";
 import { generateDetailedExplanation } from "../services/leakExplanation";
+import { prisma } from "../config/db";
 
 export async function listThreats(req: Request, res: Response) {
+  const companyId = req.user!.companyId as string;
+  if (!companyId) {
+    return res.status(400).json({ error: "Missing companyId" });
+  }
   try {
-    const { companyId } = req.query;
-    const threats = await prisma.threat.findMany({
-      where: { companyId: companyId as string },
-      include: { record: true },
-      orderBy: { createdAt: "desc" },
-      take: 100,
-    });
-    res.json(threats);
+    const queryCompanyId = QueryBuilder.validateCompanyId(companyId as string);
+
+    const queryParams: ThreatQueryParams = {
+      status: req.query.status as string,
+      threatType: req.query.threatType as string,
+      recordId: req.query.recordId as string,
+      uploadId: req.query.uploadId as string,
+      search: req.query.search as string,
+      sortBy: req.query.sortBy as string,
+      sortOrder: req.query.sortOrder as "asc" | "desc",
+      page: parseInt(req.query.page as string) || 1,
+      limit: parseInt(req.query.limit as string) || 50,
+    };
+
+    if (req.query.confidenceMin) {
+      queryParams.confidenceMin = parseFloat(req.query.confidenceMin as string);
+    }
+    if (req.query.confidenceMax) {
+      queryParams.confidenceMax = parseFloat(req.query.confidenceMax as string);
+    }
+
+    if (req.query.startDate) queryParams.startDate = req.query.startDate as string;
+    if (req.query.endDate) queryParams.endDate = req.query.endDate as string;
+
+    const result = await ThreatService.findMany(queryCompanyId, queryParams);
+
+    res.json(result);
   } catch (error) {
-    console.log(error);
-    res.status(500).json({ error: "Failed to fetch threats" });
+    handleError(error, res);
   }
 }
 
@@ -22,16 +48,14 @@ export async function getThreatDetails(req: Request, res: Response) {
   try {
     const { threatId } = req.params;
 
-    const threat = await prisma.threat.findUnique({
-      where: { id: threatId },
-      include: { record: true },
-    });
+    const threat = await ThreatService.findById(threatId);
 
     if (!threat) {
-      return res.status(404).json({ error: "Threat not found" });
+      throw new ValidationError("Threat not found");
     }
 
     const metadata = threat.metadata as any;
+
     if (metadata?.aiExplanation) {
       return res.json({
         threat: {
@@ -83,7 +107,6 @@ export async function getThreatDetails(req: Request, res: Response) {
       source: "generated",
     });
   } catch (error) {
-    console.error("Failed to get threat details:", error);
-    res.status(500).json({ error: "Failed to generate detailed analysis" });
+    handleError(error, res);
   }
 }

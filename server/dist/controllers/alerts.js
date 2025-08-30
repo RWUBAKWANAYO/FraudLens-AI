@@ -10,15 +10,39 @@ var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, P, ge
 };
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.listAlerts = listAlerts;
-const db_1 = require("../config/db");
+const alertService_1 = require("../services/alertService");
+const queryBuilder_1 = require("../utils/queryBuilder");
+const errorHandler_1 = require("../utils/errorHandler");
 function listAlerts(req, res) {
     return __awaiter(this, void 0, void 0, function* () {
-        const companyId = req.query.companyId;
-        const rows = yield db_1.prisma.alert.findMany({
-            where: { companyId },
-            orderBy: { createdAt: "desc" },
-            take: 200,
-        });
-        res.json(rows);
+        const companyId = req.user.companyId;
+        if (!companyId) {
+            return res.status(400).json({ error: "Missing companyId" });
+        }
+        try {
+            const queryCompanyId = queryBuilder_1.QueryBuilder.validateCompanyId(companyId);
+            const queryParams = {
+                severity: req.query.severity,
+                threatId: req.query.threatId,
+                recordId: req.query.recordId,
+                search: req.query.search,
+                sortBy: req.query.sortBy,
+                sortOrder: req.query.sortOrder,
+                page: parseInt(req.query.page) || 1,
+                limit: parseInt(req.query.limit) || 50,
+            };
+            if (req.query.delivered !== undefined) {
+                queryParams.delivered = req.query.delivered === "true";
+            }
+            if (req.query.startDate)
+                queryParams.startDate = req.query.startDate;
+            if (req.query.endDate)
+                queryParams.endDate = req.query.endDate;
+            const result = yield alertService_1.AlertService.findMany(queryCompanyId, queryParams);
+            res.json(result);
+        }
+        catch (error) {
+            (0, errorHandler_1.handleError)(error, res);
+        }
     });
 }

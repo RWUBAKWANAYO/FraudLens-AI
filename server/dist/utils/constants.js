@@ -1,7 +1,7 @@
 "use strict";
 var _a, _b, _c, _d;
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.WEBHOOK_DLQ = exports.WEBHOOK_RETRY_QUEUE = exports.WEBHOOK_QUEUE = exports.THREAT_TYPE_MAP = exports.SIMILARITY_BATCH_SIZE = exports.SIMILARITY_SEARCH_LIMIT = exports.SIMILARITY_SUSPICIOUS_THRESHOLD = exports.SIMILARITY_DUP_THRESHOLD = exports.AMOUNT_TOLERANCE_CENTS = exports.TS_TOLERANCE_SEC = exports.RULE = exports.SEVERITY = void 0;
+exports.VALID_ALERT_SORT_FIELDS = exports.ALERT_INCLUDE = exports.VALID_THREAT_SORT_FIELDS = exports.THREAT_INCLUDE = exports.WEBHOOK_DLQ = exports.WEBHOOK_RETRY_QUEUE = exports.WEBHOOK_QUEUE = exports.THREAT_TYPE_MAP = exports.SIMILARITY_BATCH_SIZE = exports.SIMILARITY_SEARCH_LIMIT = exports.SIMILARITY_SUSPICIOUS_THRESHOLD = exports.SIMILARITY_DUP_THRESHOLD = exports.AMOUNT_TOLERANCE_CENTS = exports.TS_TOLERANCE_SEC = exports.RULE = exports.SEVERITY = void 0;
 exports.SEVERITY = { HIGH: "high", MEDIUM: "medium", LOW: "low" };
 exports.RULE = {
     DUP_IN_BATCH__TXID: "DUP_IN_BATCH__TXID",
@@ -32,3 +32,37 @@ exports.THREAT_TYPE_MAP = {
 exports.WEBHOOK_QUEUE = "webhook.deliveries";
 exports.WEBHOOK_RETRY_QUEUE = "webhook.retries";
 exports.WEBHOOK_DLQ = "webhook.dead_letter";
+exports.THREAT_INCLUDE = {
+    record: true,
+    upload: {
+        select: {
+            fileName: true,
+            createdAt: true,
+        },
+    },
+};
+exports.VALID_THREAT_SORT_FIELDS = [
+    "createdAt",
+    "updatedAt",
+    "confidenceScore",
+    "status",
+    "threatType",
+];
+exports.ALERT_INCLUDE = {
+    threat: {
+        select: {
+            threatType: true,
+            confidenceScore: true,
+            status: true,
+        },
+    },
+    record: {
+        select: {
+            txId: true,
+            partner: true,
+            amount: true,
+            currency: true,
+        },
+    },
+};
+exports.VALID_ALERT_SORT_FIELDS = ["createdAt", "updatedAt", "severity", "delivered"];

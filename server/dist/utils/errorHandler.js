@@ -9,10 +9,8 @@ var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, P, ge
     });
 };
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.ErrorHandler = void 0;
-exports.handleError = handleError;
+exports.handleError = exports.NotFoundError = exports.ValidationError = exports.AppError = exports.ErrorHandler = void 0;
 exports.safeTry = safeTry;
-// utils/errorHandler.ts
 const error_1 = require("../types/error");
 class ErrorHandler {
     static getErrorMessage(error) {
@@ -49,20 +47,16 @@ class ErrorHandler {
         return undefined;
     }
     static isRetryable(error) {
-        // Network errors (timeouts, connection resets)
         if ((0, error_1.isNetworkError)(error)) {
             return true;
         }
-        // HTTP 5xx errors (server errors)
         const statusCode = this.getStatusCode(error);
         if (statusCode && statusCode >= 500 && statusCode < 600) {
             return true;
         }
-        // HTTP 429 (rate limiting)
         if (statusCode === 429) {
             return true;
         }
-        // Database connection errors
         if ((0, error_1.isDatabaseError)(error)) {
             const retryableCodes = [
                 "ECONNRESET",
@@ -107,12 +101,6 @@ class ErrorHandler {
     }
 }
 exports.ErrorHandler = ErrorHandler;
-// Global error handling function
-function handleError(error, context) {
-    ErrorHandler.logError(error, context);
-    throw ErrorHandler.toAppError(error);
-}
-// Safe try-catch wrapper
 function safeTry(operation, context) {
     return __awaiter(this, void 0, void 0, function* () {
         try {
@@ -126,3 +114,40 @@ function safeTry(operation, context) {
         }
     });
 }
+class AppError extends Error {
+    constructor(message, statusCode = 500, details) {
+        super(message);
+        this.message = message;
+        this.statusCode = statusCode;
+        this.details = details;
+        this.name = this.constructor.name;
+        Error.captureStackTrace(this, this.constructor);
+    }
+}
+exports.AppError = AppError;
+class ValidationError extends AppError {
+    constructor(message, details) {
+        super(message, 400, details);
+    }
+}
+exports.ValidationError = ValidationError;
+class NotFoundError extends AppError {
+    constructor(resource, id) {
+        super(`${resource}${id ? ` with id ${id}` : ""} not found`, 404);
+    }
+}
+exports.NotFoundError = NotFoundError;
+const handleError = (error, res) => {
+    console.error("Error:", error);
+    if (error instanceof AppError) {
+        return res.status(error.statusCode).json(Object.assign({ error: error.message }, (error.details && { details: error.details })));
+    }
+    if (error instanceof Error) {
+        return res.status(500).json({
+            error: "Internal server error",
+            message: process.env.NODE_ENV === "development" ? error.message : undefined,
+        });
+    }
+    res.status(500).json({ error: "Internal server error" });
+};
+exports.handleError = handleError;
