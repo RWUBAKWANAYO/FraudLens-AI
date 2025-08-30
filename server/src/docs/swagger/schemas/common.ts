@@ -74,6 +74,14 @@ export const commonSchemas = {
         type: "integer",
         example: 5,
       },
+      hasNext: {
+        type: "boolean",
+        example: true,
+      },
+      hasPrev: {
+        type: "boolean",
+        example: false,
+      },
     },
   },
 };

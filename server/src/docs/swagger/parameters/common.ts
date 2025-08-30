@@ -6,7 +6,7 @@ export const commonParameters = {
     schema: {
       type: "string",
       format: "uuid",
-      example: "1c14ece0-c700-4a92-8aa5-0b642a2963a9",
+      example: "51a19664-088e-4cb1-9887-b9c40ed86f09",
     },
     description: "Resource identifier",
   },

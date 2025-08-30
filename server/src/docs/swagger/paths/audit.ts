@@ -67,7 +67,8 @@ export const auditPaths = {
   "/audit/alerts": {
     get: {
       summary: "Get threat alerts",
-      description: "Retrieve security alerts with filtering options",
+      description:
+        "Retrieve security alerts with filtering, sorting, searching, and pagination options",
       tags: ["Audit"],
       security: [{ BearerAuth: [] }, { ApiKeyAuth: [] }],
       parameters: [
@@ -75,6 +76,12 @@ export const auditPaths = {
         { $ref: "#/components/parameters/LimitParam" },
         { $ref: "#/components/parameters/AlertStatusParam" },
         { $ref: "#/components/parameters/SeverityParam" },
+        { $ref: "#/components/parameters/ThreatTypeParam" },
+        { $ref: "#/components/parameters/RecordIdParam" },
+        { $ref: "#/components/parameters/UploadIdParam" },
+        { $ref: "#/components/parameters/SearchParam" },
+        { $ref: "#/components/parameters/SortByParam" },
+        { $ref: "#/components/parameters/SortOrderParam" },
       ],
       responses: {
         "200": {
@@ -82,13 +89,32 @@ export const auditPaths = {
           content: {
             "application/json": {
               schema: {
-                type: "array",
-                items: {
-                  $ref: "#/components/schemas/Alert",
+                type: "object",
+                properties: {
+                  data: {
+                    type: "array",
+                    items: {
+                      $ref: "#/components/schemas/Alert",
+                    },
+                  },
+                  pagination: {
+                    $ref: "#/components/schemas/Pagination",
+                  },
+                  total: {
+                    type: "integer",
+                    example: 100,
+                  },
+                  filtered: {
+                    type: "integer",
+                    example: 25,
+                  },
                 },
               },
             },
           },
+        },
+        "400": {
+          $ref: "#/components/responses/BadRequest",
         },
         "401": {
           description: "Invalid token",
@@ -112,33 +138,21 @@ export const auditPaths = {
   "/audit/threats": {
     get: {
       summary: "Get detected threats",
-      description: "Retrieve detected threats with filtering options",
+      description:
+        "Retrieve detected threats with filtering, sorting, searching, and pagination options",
       tags: ["Audit"],
       security: [{ BearerAuth: [] }, { ApiKeyAuth: [] }],
       parameters: [
         { $ref: "#/components/parameters/PageParam" },
         { $ref: "#/components/parameters/LimitParam" },
+        { $ref: "#/components/parameters/ThreatStatusParam" },
         { $ref: "#/components/parameters/SeverityParam" },
-        {
-          name: "status",
-          in: "query",
-          required: false,
-          schema: {
-            type: "string",
-            enum: ["open", "in_progress", "resolved", "false_positive"],
-          },
-          description: "Filter threats by status",
-        },
-        {
-          name: "threatType",
-          in: "query",
-          required: false,
-          schema: {
-            type: "string",
-            enum: ["DUP_IN_DB__TXID", "OTHER_THREAT_TYPE"],
-          },
-          description: "Filter threats by type",
-        },
+        { $ref: "#/components/parameters/ThreatTypeParam" },
+        { $ref: "#/components/parameters/RecordIdParam" },
+        { $ref: "#/components/parameters/UploadIdParam" },
+        { $ref: "#/components/parameters/SearchParam" },
+        { $ref: "#/components/parameters/SortByParam" },
+        { $ref: "#/components/parameters/SortOrderParam" },
       ],
       responses: {
         "200": {
@@ -146,13 +160,32 @@ export const auditPaths = {
           content: {
             "application/json": {
               schema: {
-                type: "array",
-                items: {
-                  $ref: "#/components/schemas/Threat",
+                type: "object",
+                properties: {
+                  data: {
+                    type: "array",
+                    items: {
+                      $ref: "#/components/schemas/Threat",
+                    },
+                  },
+                  pagination: {
+                    $ref: "#/components/schemas/Pagination",
+                  },
+                  total: {
+                    type: "integer",
+                    example: 100,
+                  },
+                  filtered: {
+                    type: "integer",
+                    example: 25,
+                  },
                 },
               },
             },
           },
+        },
+        "400": {
+          $ref: "#/components/responses/BadRequest",
         },
         "401": {
           description: "Invalid token",

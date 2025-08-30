@@ -17,9 +17,25 @@ exports.auditResponses = {
         content: {
             "application/json": {
                 schema: {
-                    type: "array",
-                    items: {
-                        $ref: "#/components/schemas/Alert",
+                    type: "object",
+                    properties: {
+                        data: {
+                            type: "array",
+                            items: {
+                                $ref: "#/components/schemas/Alert",
+                            },
+                        },
+                        pagination: {
+                            $ref: "#/components/schemas/Pagination",
+                        },
+                        total: {
+                            type: "integer",
+                            example: 100,
+                        },
+                        filtered: {
+                            type: "integer",
+                            example: 25,
+                        },
                     },
                 },
             },
@@ -30,9 +46,25 @@ exports.auditResponses = {
         content: {
             "application/json": {
                 schema: {
-                    type: "array",
-                    items: {
-                        $ref: "#/components/schemas/Threat",
+                    type: "object",
+                    properties: {
+                        data: {
+                            type: "array",
+                            items: {
+                                $ref: "#/components/schemas/Threat",
+                            },
+                        },
+                        pagination: {
+                            $ref: "#/components/schemas/Pagination",
+                        },
+                        total: {
+                            type: "integer",
+                            example: 100,
+                        },
+                        filtered: {
+                            type: "integer",
+                            example: 25,
+                        },
                     },
                 },
             },

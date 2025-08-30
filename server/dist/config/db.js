@@ -16,7 +16,7 @@ exports.withDbRetry = withDbRetry;
 exports.disconnectDB = disconnectDB;
 const client_1 = require("@prisma/client");
 exports.prisma = new client_1.PrismaClient({
-    log: process.env.NODE_ENV === "development" ? ["query", "error", "warn", "info"] : ["error", "warn"],
+    log: process.env.NODE_ENV === "development" ? ["error", "warn", "info"] : ["error", "warn"],
     datasources: {
         db: {
             url: process.env.DATABASE_URL +

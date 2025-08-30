@@ -3,8 +3,6 @@ import { ThreatService } from "../services/threatService";
 import { ThreatQueryParams } from "../types/threat";
 import { QueryBuilder } from "../utils/queryBuilder";
 import { handleError, ValidationError } from "../utils/errorHandler";
-import { generateDetailedExplanation } from "../services/leakExplanation";
-import { prisma } from "../config/db";
 
 export async function listThreats(req: Request, res: Response) {
   const companyId = req.user!.companyId as string;
@@ -48,64 +46,13 @@ export async function getThreatDetails(req: Request, res: Response) {
   try {
     const { threatId } = req.params;
 
-    const threat = await ThreatService.findById(threatId);
-
-    if (!threat) {
-      throw new ValidationError("Threat not found");
+    if (!threatId) {
+      throw new ValidationError("Threat ID is required");
     }
 
-    const metadata = threat.metadata as any;
+    const threatDetails = await ThreatService.getThreatDetails(threatId);
 
-    if (metadata?.aiExplanation) {
-      return res.json({
-        threat: {
-          id: threat.id,
-          threatType: threat.threatType,
-          confidenceScore: threat.confidenceScore,
-          createdAt: threat.createdAt,
-          description: threat.description,
-        },
-        explanation: metadata.aiExplanation,
-        record: threat.record,
-        source: "cached",
-      });
-    }
-
-    const context = metadata?.aiContext || {
-      threatType: threat.threatType,
-      amount: threat.record?.amount,
-      partner: threat.record?.partner,
-      txId: threat.record?.txId,
-      additionalContext: metadata?.context,
-    };
-
-    const detailedExplanation = await generateDetailedExplanation(context);
-
-    const updatedThreat = await prisma.threat.update({
-      where: { id: threatId },
-      data: {
-        metadata: {
-          ...metadata,
-          aiExplanation: detailedExplanation,
-          aiGeneratedAt: new Date().toISOString(),
-          aiExplanationGenerated: true,
-        },
-      },
-      include: { record: true },
-    });
-
-    res.json({
-      threat: {
-        id: updatedThreat.id,
-        threatType: updatedThreat.threatType,
-        confidenceScore: updatedThreat.confidenceScore,
-        createdAt: updatedThreat.createdAt,
-        description: updatedThreat.description,
-      },
-      explanation: detailedExplanation,
-      record: updatedThreat.record,
-      source: "generated",
-    });
+    res.json(threatDetails);
   } catch (error) {
     handleError(error, res);
   }
