@@ -33,9 +33,15 @@ yarn-error.log*
 *.tsbuildinfo
 next-env.d.ts
 
+/temp
 /src/generated/prisma
 test-schema.js
-/temp
 draft.js
 /src/scripts
 /src/benchmarks
+
+/dist/generated/prisma
+test-schema.js
+draft.js
+/dist/scripts
+/dist/benchmarks

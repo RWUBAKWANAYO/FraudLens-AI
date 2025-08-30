@@ -1,0 +1,9 @@
+"use strict";
+Object.defineProperty(exports, "__esModule", { value: true });
+exports.allPaths = void 0;
+const apiKeys_1 = require("./apiKeys");
+const auth_1 = require("./auth");
+const users_1 = require("./users");
+const webhooks_1 = require("./webhooks");
+const audit_1 = require("./audit");
+exports.allPaths = Object.assign(Object.assign(Object.assign(Object.assign(Object.assign({}, auth_1.authPaths), apiKeys_1.apiKeyPaths), users_1.userPaths), webhooks_1.webhookPaths), audit_1.auditPaths);

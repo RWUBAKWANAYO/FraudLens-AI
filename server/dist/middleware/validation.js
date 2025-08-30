@@ -30,5 +30,5 @@ exports.forgotPasswordValidation = [
 ];
 exports.resetPasswordValidation = [
     (0, express_validator_1.body)("token").notEmpty().withMessage("Reset token is required"),
-    (0, express_validator_1.body)("password").isLength({ min: 8 }).withMessage("Password must be at least 8 characters"),
+    (0, express_validator_1.body)("password").isLength({ min: 6 }).withMessage("Password must be at least 6 characters"),
 ];

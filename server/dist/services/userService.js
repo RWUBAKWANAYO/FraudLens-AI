@@ -44,6 +44,12 @@ class UserService {
             if (!updater || updater.companyId !== companyId) {
                 throw new Error("Unauthorized");
             }
+            const isUserExist = yield db_1.prisma.user.findUnique({
+                where: { id: userId },
+            });
+            if (!isUserExist) {
+                throw new Error("User not found");
+            }
             if (userId === updaterId && role !== "ADMIN") {
                 const adminCount = yield db_1.prisma.user.count({
                     where: {

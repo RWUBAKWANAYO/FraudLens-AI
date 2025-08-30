@@ -223,6 +223,8 @@ export async function detectLeaks(
     await updateStageProgress(100 / records.length, 0);
   }
 
+  // ---------------- Stage 1: Historical (DB) strict duplicates ----------------
+
   const historicalDuplicates: PrismaRecord[] = [];
   for (const rec of records) {
     if (alreadyFlaggedRecordIds.has(rec.id)) continue;
@@ -318,6 +320,8 @@ export async function detectLeaks(
     await updateStageProgress(100 / historicalDuplicates.length, 1);
   }
 
+  // ---------------- Stage 2: Batch (current upload) strict duplicates ----------------
+
   const totalBatches = byTxId.size + byCanonical.size;
   let batchesProcessed = 0;
 
@@ -400,6 +404,8 @@ export async function detectLeaks(
     batchesProcessed++;
     await updateStageProgress(100 / totalBatches, 2);
   }
+
+  // ------------------ Stage 3: Vector similarity with batching ----------------
 
   const similarityFlaggedRecordIds = new Set<string>();
   if (recordsWithEmbeddings.length > 0) {

@@ -33,5 +33,5 @@ export const forgotPasswordValidation = [
 
 export const resetPasswordValidation = [
   body("token").notEmpty().withMessage("Reset token is required"),
-  body("password").isLength({ min: 8 }).withMessage("Password must be at least 8 characters"),
+  body("password").isLength({ min: 6 }).withMessage("Password must be at least 6 characters"),
 ];

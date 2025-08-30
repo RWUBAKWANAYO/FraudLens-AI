@@ -188,6 +188,7 @@ function detectLeaks(records, uploadId, companyId, onProgress) {
             }
             yield updateStageProgress(100 / records.length, 0);
         }
+        // ---------------- Stage 1: Historical (DB) strict duplicates ----------------
         const historicalDuplicates = [];
         for (const rec of records) {
             if (alreadyFlaggedRecordIds.has(rec.id))
@@ -266,6 +267,7 @@ function detectLeaks(records, uploadId, companyId, onProgress) {
             }
             yield updateStageProgress(100 / historicalDuplicates.length, 1);
         }
+        // ---------------- Stage 2: Batch (current upload) strict duplicates ----------------
         const totalBatches = byTxId.size + byCanonical.size;
         let batchesProcessed = 0;
         for (const [txId, list] of byTxId.entries()) {
@@ -328,6 +330,7 @@ function detectLeaks(records, uploadId, companyId, onProgress) {
             batchesProcessed++;
             yield updateStageProgress(100 / totalBatches, 2);
         }
+        // ------------------ Stage 3: Vector similarity with batching ----------------
         const similarityFlaggedRecordIds = new Set();
         if (recordsWithEmbeddings.length > 0) {
             yield processSimilarityInBatches(records.filter((r) => !alreadyFlaggedRecordIds.has(r.id) && r.embeddingJson), companyId, uploadId, alreadyFlaggedRecordIds, similarityFlaggedRecordIds, emit, (processed, totalSimilarity) => __awaiter(this, void 0, void 0, function* () {

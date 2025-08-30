@@ -6,11 +6,14 @@ import { authRouter } from "./routes/auth";
 import { usersRouter } from "./routes/users";
 import { webhookRouter } from "./routes/webhook";
 import { apiKeyRouter } from "./routes/apiKey";
+import { setupSwagger } from "./docs/swagger";
 
 const app = express();
 
 app.use(cors());
 app.use(express.json());
+
+setupSwagger(app);
 
 app.use("/api/v1/audit", auditRouter);
 app.use("/api/v1/auth", authRouter);

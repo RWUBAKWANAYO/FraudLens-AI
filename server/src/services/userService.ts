@@ -34,6 +34,14 @@ export class UserService {
       throw new Error("Unauthorized");
     }
 
+    const isUserExist = await prisma.user.findUnique({
+      where: { id: userId },
+    });
+
+    if (!isUserExist) {
+      throw new Error("User not found");
+    }
+
     if (userId === updaterId && role !== "ADMIN") {
       const adminCount = await prisma.user.count({
         where: {
