@@ -8,6 +8,7 @@ import SimilaritySearch from "../components/SimilaritySearch";
 import RuleManager from "../components/RuleManager";
 import { UploadProvider } from "../contexts/UploadContext";
 import io, { Socket } from "socket.io-client";
+import UploadsList from "@/components/UploadsList";
 
 interface Company {
   id: string;
@@ -17,8 +18,8 @@ interface Company {
 
 // Use the seeded company IDs directly
 const SEEDED_COMPANIES: Company[] = [
-  { id: "a0b49a62-3a08-4e84-b126-134da675e048", name: "Nayo Group", slug: "nayo-inc" },
   { id: "04e75f80-a2d9-418d-92e9-057eec3b76475", name: "Globex Inc", slug: "globex-inc" },
+  { id: "ca5df2e2-abc2-4542-8328-3a19ee1a1cc0", name: "Nayo Group", slug: "nayo-inc" },
   {
     id: "741ea1e3-00a5-4a3b-aec6-392fb99d5b8e",
     name: "Wayne Enterprises",
@@ -123,6 +124,16 @@ export default function Home() {
             </button>
             <button
               className={`px-4 py-2 font-medium whitespace-nowrap ${
+                activeTab === "uploads"
+                  ? "border-b-2 border-blue-500 text-blue-600"
+                  : "text-gray-500"
+              }`}
+              onClick={() => setActiveTab("uploads")}
+            >
+              Upload History
+            </button>
+            <button
+              className={`px-4 py-2 font-medium whitespace-nowrap ${
                 activeTab === "threats"
                   ? "border-b-2 border-blue-500 text-blue-600"
                   : "text-gray-500"
@@ -158,6 +169,10 @@ export default function Home() {
 
             <div className={activeTab !== "alerts" ? "hidden" : ""}>
               <RealTimeAlerts companyId={selectedCompanyId} />
+            </div>
+
+            <div className={activeTab !== "uploads" ? "hidden" : ""}>
+              <UploadsList companyId={selectedCompanyId} />
             </div>
 
             <div className={activeTab !== "threats" ? "hidden" : ""}>

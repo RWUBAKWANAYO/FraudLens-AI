@@ -9,11 +9,12 @@ import {
 import { detectLeaks } from "../services/leakDetection";
 import { prepareRecordData, sha256, validateFileExtension } from "../utils/uploadUtils";
 import { prisma } from "../config/db";
+import { CloudinaryService } from "./cloudinaryService";
 
 const EMBEDDINGS_ASYNC = process.env.EMBEDDINGS_ASYNC !== "false";
 
-export async function processUpload(file: Express.Multer.File, companyId: string) {
-  const { buffer, originalname: fileName, mimetype: fileType } = file;
+export async function processFileUpload(file: Express.Multer.File, companyId: string) {
+  const { buffer, originalname: fileName, mimetype: fileType, size: fileSize } = file;
 
   validateFileExtension(fileName);
 
@@ -23,9 +24,23 @@ export async function processUpload(file: Express.Multer.File, companyId: string
     return duplicateResult;
   }
 
-  const upload = await createUploadRecord(companyId, fileName, fileType, fileHash);
-  const parsed = await parseBuffer(buffer, fileName);
+  const cloudinaryResponse = await CloudinaryService.uploadBuffer(
+    buffer,
+    fileName,
+    `company/${companyId}/uploads`
+  );
 
+  const upload = await createUploadRecord({
+    companyId,
+    fileName,
+    fileType,
+    fileHash,
+    fileSize,
+    publicId: cloudinaryResponse.public_id,
+    secureUrl: cloudinaryResponse.secure_url,
+  });
+
+  const parsed = await parseBuffer(buffer, fileName);
   const recordsToInsert = parsed.map((record) => prepareRecordData(record, companyId, upload.id));
 
   await bulkInsertRecords(recordsToInsert);
@@ -46,9 +61,9 @@ export async function processUpload(file: Express.Multer.File, companyId: string
         totalRecords: parsed.length,
         flagged: 0,
         flaggedValue: 0,
-        message: `File uploaded successfully. ${parsed.length} records queued for processing. Threats will be detected asynchronously.`,
       },
       processingAsync: true,
+      downloadUrl: `/api/uploads/download/${upload.id}`,
     };
   }
 
@@ -75,10 +90,7 @@ export async function processUpload(file: Express.Multer.File, companyId: string
     recordsAnalyzed: insertedRecords.length,
     threats: threatsCreated,
     summary,
-    embeddingsQueued: EMBEDDINGS_ASYNC,
     processingMode: EMBEDDINGS_ASYNC ? "async" : "sync",
-    message: EMBEDDINGS_ASYNC
-      ? "File uploaded successfully. Records queued for async processing. Threats will be detected shortly."
-      : "File processed synchronously. All threats detected.",
+    downloadUrl: `/api/uploads/download/${upload.id}`,
   };
 }

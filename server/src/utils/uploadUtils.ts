@@ -1,4 +1,7 @@
 import crypto from "crypto";
+import { normalizeAmount, normalizeDate } from "./normalizeData";
+import { FieldMappingConfig, Parsed } from "../types/fileParser";
+import { DEFAULT_FIELD_MAPPING } from "./constants";
 
 export function sha256(buf: Buffer | string): string {
   return crypto.createHash("sha256").update(buf).digest("hex");
@@ -132,4 +135,188 @@ export function prepareRecordData(rawRecord: any, companyId: string, uploadId: s
     canonicalKey,
     recordSignature,
   };
+}
+
+const ALLOWED_EXTENSIONS = [".json", ".csv", ".xlsx", ".xls"];
+
+export function validateUploadFile(
+  file: Express.Multer.File | undefined,
+  jsonData: any
+): string | null {
+  if (jsonData) {
+    return null;
+  }
+
+  if (!file) {
+    return "No file uploaded";
+  }
+
+  const fileExtension = file.originalname.toLowerCase();
+  const isValidExtension = ALLOWED_EXTENSIONS.some((ext) => fileExtension.endsWith(ext));
+
+  if (!isValidExtension) {
+    return `Invalid file type. Allowed: ${ALLOWED_EXTENSIONS.join(", ")}`;
+  }
+
+  return null;
+}
+
+export class FieldMapper {
+  private data: Record<string, any>;
+  private config: FieldMappingConfig;
+  private normalizedData: Record<string, any>;
+
+  constructor(data: Record<string, any>, config: FieldMappingConfig = DEFAULT_FIELD_MAPPING) {
+    this.data = data;
+    this.config = config;
+    this.normalizedData = this.normalizeKeys(data);
+  }
+
+  private normalizeKeys(data: Record<string, any>): Record<string, any> {
+    const normalized: Record<string, any> = {};
+
+    for (const [key, value] of Object.entries(data)) {
+      // Create multiple normalized versions
+      const lowerKey = key.toLowerCase().trim();
+      const snakeKey = key.replace(/\s+/g, "_").toLowerCase();
+      const camelKey = key
+        .replace(/(?:^\w|[A-Z]|\b\w|\s+)/g, (match, index) =>
+          index === 0 ? match.toLowerCase() : match.toUpperCase()
+        )
+        .replace(/\s+/g, "");
+
+      normalized[lowerKey] = value;
+      normalized[snakeKey] = value;
+      normalized[camelKey] = value;
+      normalized[key] = value; // Keep original
+    }
+
+    return normalized;
+  }
+
+  private pick(fieldNames: string[]): any {
+    for (const field of fieldNames) {
+      const value = this.normalizedData[field];
+      if (value !== undefined && value !== null && value !== "") {
+        return value;
+      }
+    }
+    return undefined;
+  }
+
+  // Public mapping methods
+  getTransactionId(): string | undefined {
+    return this.pick(this.config.transactionId || []);
+  }
+
+  getPartner(): string | undefined {
+    return this.pick(this.config.partner || []);
+  }
+
+  getAmount(): number {
+    const amountValue = this.pick(this.config.amount || []);
+    return normalizeAmount(amountValue) || 0;
+  }
+
+  getDate(): string | undefined {
+    const dateValue = this.pick(this.config.date || []);
+    const normalized = normalizeDate(dateValue);
+    return normalized ? normalized.toISOString() : undefined;
+  }
+
+  getCurrency(): string {
+    return (this.pick(this.config.currency || []) as string) || "USD";
+  }
+
+  getEmail(): string | undefined {
+    return this.pick(this.config.email || []);
+  }
+
+  getDescription(): string | undefined {
+    return this.pick(this.config.description || []);
+  }
+
+  getStatus(): string | undefined {
+    return this.pick(this.config.status || []);
+  }
+
+  getUserId(): string | undefined {
+    return this.pick(this.config.userId || []);
+  }
+
+  getAccount(): string | undefined {
+    return this.pick(this.config.account || []);
+  }
+
+  getCard(): string | undefined {
+    return this.pick(this.config.card || []);
+  }
+
+  getBankAccount(): string | undefined {
+    return this.pick(this.config.bankAccount || []);
+  }
+
+  getAccountNumber(): string | undefined {
+    return this.pick(this.config.accountNumber || []);
+  }
+
+  getIp(): string | undefined {
+    return this.pick(this.config.ip || []);
+  }
+
+  getDevice(): string | undefined {
+    return this.pick(this.config.device || []);
+  }
+
+  getAllMappedFields(): any {
+    return {
+      txId: this.getTransactionId(),
+      partner: this.getPartner(),
+      amount: this.getAmount(),
+      date: this.getDate(),
+      currency: this.getCurrency(),
+      email: this.getEmail(),
+      description: this.getDescription(),
+      status: this.getStatus(),
+      user_id: this.getUserId(),
+      account: this.getAccount(),
+      card: this.getCard(),
+      bank_account: this.getBankAccount(),
+      account_number: this.getAccountNumber(),
+      ip: this.getIp(),
+      device: this.getDevice(),
+      raw: this.data,
+    };
+  }
+}
+
+export function mapFields(data: Record<string, any>, config?: FieldMappingConfig): any {
+  const mapper = new FieldMapper(data, config);
+  return mapper.getAllMappedFields();
+}
+
+export function parseJsonData(data: any[]): Parsed[] {
+  return data.map((item: any, index: number) => {
+    const mapped = mapFields(item);
+
+    return {
+      txId: mapped.txId || `json-${Date.now()}-${index}`,
+      partner: mapped.partner,
+      amount: mapped.amount,
+      date: mapped.date,
+      currency: mapped.currency,
+      email: mapped.email,
+      description: mapped.description,
+      status: mapped.status,
+      user_id: mapped.user_id,
+      account: mapped.account,
+      card: mapped.card,
+      bank_account: mapped.bank_account,
+      account_number: mapped.account_number,
+      ip: mapped.ip,
+      device: mapped.device,
+      raw: item,
+      embeddingJson: null,
+    };
+  });
 }

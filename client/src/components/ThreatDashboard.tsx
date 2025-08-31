@@ -22,7 +22,6 @@ export default function ThreatDashboard({ companyId }: { companyId: string }) {
   useEffect(() => {
     const fetchThreats = async () => {
       try {
-        // This endpoint would need to be implemented in your backend
         const response = await fetch(
           `${process.env.NEXT_PUBLIC_SERVER_URL}/audit/threats?companyId=${companyId}`,
           {
@@ -32,7 +31,7 @@ export default function ThreatDashboard({ companyId }: { companyId: string }) {
           }
         );
         const data = await response.json();
-        setThreats(data);
+        setThreats(data?.data || []);
       } catch (error) {
         console.error("Failed to fetch threats:", error);
       } finally {

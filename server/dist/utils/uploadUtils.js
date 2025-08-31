@@ -3,6 +3,7 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
     return (mod && mod.__esModule) ? mod : { "default": mod };
 };
 Object.defineProperty(exports, "__esModule", { value: true });
+exports.FieldMapper = void 0;
 exports.sha256 = sha256;
 exports.normalizeCurrency = normalizeCurrency;
 exports.normalizePartner = normalizePartner;
@@ -13,7 +14,12 @@ exports.mkCanonicalKey = mkCanonicalKey;
 exports.mkRecordSignature = mkRecordSignature;
 exports.validateFileExtension = validateFileExtension;
 exports.prepareRecordData = prepareRecordData;
+exports.validateUploadFile = validateUploadFile;
+exports.mapFields = mapFields;
+exports.parseJsonData = parseJsonData;
 const crypto_1 = __importDefault(require("crypto"));
+const normalizeData_1 = require("./normalizeData");
+const constants_1 = require("./constants");
 function sha256(buf) {
     return crypto_1.default.createHash("sha256").update(buf).digest("hex");
 }
@@ -123,4 +129,149 @@ function prepareRecordData(rawRecord, companyId, uploadId) {
         canonicalKey,
         recordSignature,
     };
+}
+const ALLOWED_EXTENSIONS = [".json", ".csv", ".xlsx", ".xls"];
+function validateUploadFile(file, jsonData) {
+    if (jsonData) {
+        return null;
+    }
+    if (!file) {
+        return "No file uploaded";
+    }
+    const fileExtension = file.originalname.toLowerCase();
+    const isValidExtension = ALLOWED_EXTENSIONS.some((ext) => fileExtension.endsWith(ext));
+    if (!isValidExtension) {
+        return `Invalid file type. Allowed: ${ALLOWED_EXTENSIONS.join(", ")}`;
+    }
+    return null;
+}
+class FieldMapper {
+    constructor(data, config = constants_1.DEFAULT_FIELD_MAPPING) {
+        this.data = data;
+        this.config = config;
+        this.normalizedData = this.normalizeKeys(data);
+    }
+    normalizeKeys(data) {
+        const normalized = {};
+        for (const [key, value] of Object.entries(data)) {
+            // Create multiple normalized versions
+            const lowerKey = key.toLowerCase().trim();
+            const snakeKey = key.replace(/\s+/g, "_").toLowerCase();
+            const camelKey = key
+                .replace(/(?:^\w|[A-Z]|\b\w|\s+)/g, (match, index) => index === 0 ? match.toLowerCase() : match.toUpperCase())
+                .replace(/\s+/g, "");
+            normalized[lowerKey] = value;
+            normalized[snakeKey] = value;
+            normalized[camelKey] = value;
+            normalized[key] = value; // Keep original
+        }
+        return normalized;
+    }
+    pick(fieldNames) {
+        for (const field of fieldNames) {
+            const value = this.normalizedData[field];
+            if (value !== undefined && value !== null && value !== "") {
+                return value;
+            }
+        }
+        return undefined;
+    }
+    // Public mapping methods
+    getTransactionId() {
+        return this.pick(this.config.transactionId || []);
+    }
+    getPartner() {
+        return this.pick(this.config.partner || []);
+    }
+    getAmount() {
+        const amountValue = this.pick(this.config.amount || []);
+        return (0, normalizeData_1.normalizeAmount)(amountValue) || 0;
+    }
+    getDate() {
+        const dateValue = this.pick(this.config.date || []);
+        const normalized = (0, normalizeData_1.normalizeDate)(dateValue);
+        return normalized ? normalized.toISOString() : undefined;
+    }
+    getCurrency() {
+        return this.pick(this.config.currency || []) || "USD";
+    }
+    getEmail() {
+        return this.pick(this.config.email || []);
+    }
+    getDescription() {
+        return this.pick(this.config.description || []);
+    }
+    getStatus() {
+        return this.pick(this.config.status || []);
+    }
+    getUserId() {
+        return this.pick(this.config.userId || []);
+    }
+    getAccount() {
+        return this.pick(this.config.account || []);
+    }
+    getCard() {
+        return this.pick(this.config.card || []);
+    }
+    getBankAccount() {
+        return this.pick(this.config.bankAccount || []);
+    }
+    getAccountNumber() {
+        return this.pick(this.config.accountNumber || []);
+    }
+    getIp() {
+        return this.pick(this.config.ip || []);
+    }
+    getDevice() {
+        return this.pick(this.config.device || []);
+    }
+    getAllMappedFields() {
+        return {
+            txId: this.getTransactionId(),
+            partner: this.getPartner(),
+            amount: this.getAmount(),
+            date: this.getDate(),
+            currency: this.getCurrency(),
+            email: this.getEmail(),
+            description: this.getDescription(),
+            status: this.getStatus(),
+            user_id: this.getUserId(),
+            account: this.getAccount(),
+            card: this.getCard(),
+            bank_account: this.getBankAccount(),
+            account_number: this.getAccountNumber(),
+            ip: this.getIp(),
+            device: this.getDevice(),
+            raw: this.data,
+        };
+    }
+}
+exports.FieldMapper = FieldMapper;
+function mapFields(data, config) {
+    const mapper = new FieldMapper(data, config);
+    return mapper.getAllMappedFields();
+}
+function parseJsonData(data) {
+    return data.map((item, index) => {
+        const mapped = mapFields(item);
+        return {
+            txId: mapped.txId || `json-${Date.now()}-${index}`,
+            partner: mapped.partner,
+            amount: mapped.amount,
+            date: mapped.date,
+            currency: mapped.currency,
+            email: mapped.email,
+            description: mapped.description,
+            status: mapped.status,
+            user_id: mapped.user_id,
+            account: mapped.account,
+            card: mapped.card,
+            bank_account: mapped.bank_account,
+            account_number: mapped.account_number,
+            ip: mapped.ip,
+            device: mapped.device,
+            raw: item,
+            embeddingJson: null,
+        };
+    });
 }

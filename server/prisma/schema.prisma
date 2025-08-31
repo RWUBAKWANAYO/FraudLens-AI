@@ -1,4 +1,3 @@
-// server/prisma/schema.prisma
 generator client {
   provider = "prisma-client-js"
 }
@@ -9,7 +8,6 @@ datasource db {
   relationMode = "prisma"
 }
 
-/// Multi-tenant: a company owns uploads, records, alerts, and webhook subs
 model Company {
   id          String                @id @default(uuid())
   name        String
@@ -24,7 +22,7 @@ model Company {
   webhooks    WebhookSubscription[]
   users       User[]
   invitations Invitation[]
-  apiKeys     ApiKey[] // Added relation to ApiKey
+  apiKeys     ApiKey[]
 
   @@index([slug])
 }
@@ -48,7 +46,7 @@ model User {
   invitedById       String?
   invitedUsers      User[]       @relation("UserInvitations")
   sentInvitations   Invitation[]
-  createdApiKeys    ApiKey[] // Added relation to ApiKey
+  createdApiKeys    ApiKey[]
 
   @@index([companyId, email])
   @@index([verificationToken])
@@ -94,7 +92,7 @@ model ApiKey {
   createdAt  DateTime  @default(now())
   expiresAt  DateTime?
   lastUsedAt DateTime?
-  createdBy  String // User ID who created the key
+  createdBy  String
 
   company Company @relation(fields: [companyId], references: [id], onDelete: Cascade)
   user    User?   @relation(fields: [createdBy], references: [id], onDelete: NoAction)
@@ -110,7 +108,8 @@ model Upload {
   id          String    @id @default(uuid())
   companyId   String
   fileName    String
-  fileType    String
+  fileType    String?
+  fileSize    Int?
   source      String    @default("batch")
   fileHash    String?
   status      String    @default("pending")
@@ -119,9 +118,14 @@ model Upload {
   error       String?
   createdAt   DateTime  @default(now())
   updatedAt   DateTime  @updatedAt
-  records     Record[]
-  threats     Threat[]
-  company     Company   @relation(fields: [companyId], references: [id], onDelete: Cascade)
+
+  publicId     String? @unique
+  secureUrl    String?
+  resourceType String?
+
+  records Record[]
+  threats Threat[]
+  company Company  @relation(fields: [companyId], references: [id], onDelete: Cascade)
 
   @@index([companyId, fileHash, createdAt])
   @@index([status])
@@ -145,7 +149,6 @@ model Record {
   channel       String?                     @db.VarChar(32)
   raw           Json?
   embeddingJson Json?
-  /// TiDB VECTOR column (Prisma doesn't natively support it yet)
   /// VECTOR dimension: 384 for OpenAI, 1105 for local AI
   embeddingVec  Unsupported("vector(384)")?
   createdAt     DateTime                    @default(now())
@@ -162,8 +165,8 @@ model Record {
   accountMasked      String?
   timeBucket30s      Int?
   timeBucket60s      Int?
-  canonicalKey       String? // userKey|normalizedPartner|amount|currency|bucket30s (hashed)
-  recordSignature    String? // for same-upload idempotency
+  canonicalKey       String?
+  recordSignature    String?
 
   @@index([companyId, txId])
   @@index([companyId, canonicalKey])
@@ -242,8 +245,8 @@ model WebhookDelivery {
   success      Boolean
   attempt      Int
   error        String?
-  responseTime Int? // Change from DateTime to Int (milliseconds)
-  environment  String? // Add environment field
+  responseTime Int?
+  environment  String?
   createdAt    DateTime            @default(now())
   webhook      WebhookSubscription @relation(fields: [webhookId], references: [id], onDelete: Cascade)
 
@@ -257,14 +260,14 @@ model Rule {
   id          String   @id @default(uuid())
   companyId   String
   name        String
-  description String?  @db.Text // Add description field
+  description String?  @db.Text
   definition  Json
   enabled     Boolean  @default(true)
-  priority    Int      @default(0) // Add priority field
+  priority    Int      @default(0)
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
   company     Company  @relation(fields: [companyId], references: [id], onDelete: Cascade)
 
   @@index([companyId], map: "Rule_companyId_fkey")
-  @@index([companyId, priority]) // Add index for priority
+  @@index([companyId, priority])
 }

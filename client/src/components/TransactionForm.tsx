@@ -54,7 +54,6 @@ export default function TransactionForm({ companyId }: TransactionFormProps) {
     e.preventDefault();
     if (!companyId) return;
 
-    // Validate required fields
     const hasEmptyFields = transactions.some(
       (tx) => !tx.txId.trim() || !tx.partner.trim() || !tx.date.trim() || tx.amount <= 0
     );
@@ -74,26 +73,21 @@ export default function TransactionForm({ companyId }: TransactionFormProps) {
           Authorization: process.env.NEXT_PUBLIC_TOKEN!,
         },
         body: JSON.stringify({
-          jsonData: transactions,
-          fileName: "manual-transactions.json",
-          companyId,
+          data: transactions,
         }),
       });
 
       if (response.ok) {
         const data: UploadResponse = await response.json();
         console.log("Transactions uploaded:", data.uploadId);
-        alert(`Successfully uploaded ${transactions.length} transactions!`);
         // Reset form
         setTransactions([{ txId: "", partner: "", amount: 0, date: "", currency: "USD" }]);
       } else {
         const error = await response.text();
         console.error("Upload failed:", error);
-        alert(`Upload failed: ${error}`);
       }
     } catch (error) {
       console.error("Error uploading transactions:", error);
-      alert("Error uploading transactions");
     } finally {
       setIsUploading(false);
     }

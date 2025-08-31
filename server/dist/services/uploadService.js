@@ -11,12 +11,14 @@ var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, P, ge
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.checkDuplicateUpload = checkDuplicateUpload;
 exports.createUploadRecord = createUploadRecord;
+exports.getUploadsList = getUploadsList;
 exports.bulkInsertRecords = bulkInsertRecords;
 exports.generateEmbeddingsForRecords = generateEmbeddingsForRecords;
 exports.queueAsyncProcessing = queueAsyncProcessing;
 const db_1 = require("../config/db");
 const aiEmbedding_1 = require("../services/aiEmbedding");
 const bus_1 = require("../queue/bus");
+const queryBuilder_1 = require("../utils/queryBuilder");
 const CREATE_MANY_CHUNK = Number(process.env.CREATE_MANY_CHUNK || 2000);
 const EMBED_BATCH = Number(process.env.EMBED_BATCH || 50);
 function checkDuplicateUpload(companyId, fileHash) {
@@ -52,11 +54,84 @@ function checkDuplicateUpload(companyId, fileHash) {
         };
     });
 }
-function createUploadRecord(companyId, fileName, fileType, fileHash) {
+function createUploadRecord(options) {
     return __awaiter(this, void 0, void 0, function* () {
+        const { companyId, fileName, fileType = null, fileHash, fileSize = 0, publicId = null, secureUrl = null, resourceType = null, source = "batch", status = "pending", } = options;
         return db_1.prisma.upload.create({
-            data: { companyId, fileName, fileType, source: "batch", fileHash },
+            data: {
+                companyId,
+                fileName,
+                fileType,
+                source,
+                fileHash,
+                fileSize,
+                publicId,
+                secureUrl,
+                resourceType,
+                status,
+            },
         });
+    });
+}
+function getUploadsList(companyId_1) {
+    return __awaiter(this, arguments, void 0, function* (companyId, options = {}) {
+        const { page = 1, limit = 50, sortBy, sortOrder = "desc", searchTerm, filters = {} } = options;
+        const pagination = queryBuilder_1.QueryBuilder.buildPagination(page, limit);
+        let where = {
+            companyId,
+            OR: [{ fileSize: { gt: 1 } }, { fileName: { not: "direct-data-upload" } }],
+        };
+        where = queryBuilder_1.QueryBuilder.buildWhere(where, filters, ["fileName", "fileType"], searchTerm);
+        if (filters.createdAtMin || filters.createdAtMax) {
+            where = queryBuilder_1.QueryBuilder.buildDateRange(where, filters.createdAtMin, filters.createdAtMax, "createdAt");
+        }
+        if (filters.completedAtMin || filters.completedAtMax) {
+            where = queryBuilder_1.QueryBuilder.buildDateRange(where, filters.completedAtMin, filters.completedAtMax, "completedAt");
+        }
+        const validSortFields = [
+            "fileName",
+            "fileType",
+            "fileSize",
+            "status",
+            "createdAt",
+            "completedAt",
+        ];
+        const orderBy = queryBuilder_1.QueryBuilder.buildSort(sortBy, sortOrder, {
+            validSortFields,
+            defaultSort: "createdAt",
+        });
+        const [uploads, _totalCount] = yield Promise.all([
+            db_1.prisma.upload.findMany({
+                where,
+                select: {
+                    id: true,
+                    fileName: true,
+                    fileType: true,
+                    fileSize: true,
+                    status: true,
+                    createdAt: true,
+                    completedAt: true,
+                    publicId: true,
+                    resourceType: true,
+                    _count: {
+                        select: {
+                            records: true,
+                            threats: true,
+                        },
+                    },
+                },
+                orderBy,
+                skip: pagination.skip,
+                take: pagination.take,
+            }),
+            db_1.prisma.upload.count({ where }),
+        ]);
+        // Build pagination result
+        const paginationResult = yield queryBuilder_1.QueryBuilder.buildPaginationResult(db_1.prisma.upload, where, pagination.page, pagination.limit);
+        return {
+            uploads,
+            pagination: paginationResult,
+        };
     });
 }
 function bulkInsertRecords(records) {

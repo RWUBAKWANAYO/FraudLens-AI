@@ -2,6 +2,20 @@ import { prisma } from "../config/db";
 import { Record } from "@prisma/client";
 import { getEmbeddingsBatch } from "../services/aiEmbedding";
 import { publish } from "../queue/bus";
+import { QueryBuilder } from "../utils/queryBuilder";
+
+export interface CreateUploadRecordOptions {
+  companyId: string;
+  fileName: string;
+  fileHash: string;
+  fileType?: string;
+  fileSize?: number;
+  publicId?: string;
+  secureUrl?: string;
+  resourceType?: string;
+  source?: string;
+  status?: string;
+}
 
 const CREATE_MANY_CHUNK = Number(process.env.CREATE_MANY_CHUNK || 2000);
 const EMBED_BATCH = Number(process.env.EMBED_BATCH || 50);
@@ -40,15 +54,117 @@ export async function checkDuplicateUpload(companyId: string, fileHash: string) 
   };
 }
 
-export async function createUploadRecord(
-  companyId: string,
-  fileName: string,
-  fileType: string,
-  fileHash: string
-) {
+export async function createUploadRecord(options: CreateUploadRecordOptions) {
+  const {
+    companyId,
+    fileName,
+    fileType = null,
+    fileHash,
+    fileSize = 0,
+    publicId = null,
+    secureUrl = null,
+    resourceType = null,
+    source = "batch",
+    status = "pending",
+  } = options;
+
   return prisma.upload.create({
-    data: { companyId, fileName, fileType, source: "batch", fileHash },
+    data: {
+      companyId,
+      fileName,
+      fileType,
+      source,
+      fileHash,
+      fileSize,
+      publicId,
+      secureUrl,
+      resourceType,
+      status,
+    },
   });
+}
+export async function getUploadsList(companyId: string, options: any = {}) {
+  const { page = 1, limit = 50, sortBy, sortOrder = "desc", searchTerm, filters = {} } = options;
+
+  const pagination = QueryBuilder.buildPagination(page, limit);
+
+  let where: any = {
+    companyId,
+    OR: [{ fileSize: { gt: 1 } }, { fileName: { not: "direct-data-upload" } }],
+  };
+
+  where = QueryBuilder.buildWhere(where, filters, ["fileName", "fileType"], searchTerm);
+
+  if (filters.createdAtMin || filters.createdAtMax) {
+    where = QueryBuilder.buildDateRange(
+      where,
+      filters.createdAtMin,
+      filters.createdAtMax,
+      "createdAt"
+    );
+  }
+
+  if (filters.completedAtMin || filters.completedAtMax) {
+    where = QueryBuilder.buildDateRange(
+      where,
+      filters.completedAtMin,
+      filters.completedAtMax,
+      "completedAt"
+    );
+  }
+
+  const validSortFields = [
+    "fileName",
+    "fileType",
+    "fileSize",
+    "status",
+    "createdAt",
+    "completedAt",
+  ];
+  const orderBy = QueryBuilder.buildSort(sortBy, sortOrder, {
+    validSortFields,
+    defaultSort: "createdAt",
+  });
+
+  const [uploads, _totalCount] = await Promise.all([
+    prisma.upload.findMany({
+      where,
+      select: {
+        id: true,
+        fileName: true,
+        fileType: true,
+        fileSize: true,
+        status: true,
+        createdAt: true,
+        completedAt: true,
+        publicId: true,
+        resourceType: true,
+        _count: {
+          select: {
+            records: true,
+            threats: true,
+          },
+        },
+      },
+      orderBy,
+      skip: pagination.skip,
+      take: pagination.take,
+    }),
+    prisma.upload.count({ where }),
+  ]);
+
+  // Build pagination result
+  const paginationResult = await QueryBuilder.buildPaginationResult(
+    prisma.upload,
+    where,
+    pagination.page,
+    pagination.limit
+  );
+
+  return {
+    uploads,
+    pagination: paginationResult,
+  };
 }
 
 export async function bulkInsertRecords(records: any[]) {

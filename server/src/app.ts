@@ -7,6 +7,7 @@ import { usersRouter } from "./routes/users";
 import { webhookRouter } from "./routes/webhook";
 import { apiKeyRouter } from "./routes/apiKey";
 import { setupSwagger } from "./docs/swagger";
+import { statsRouter } from "./routes/stats";
 
 const app = express();
 
@@ -20,6 +21,7 @@ app.use("/api/v1/auth", authRouter);
 app.use("/api/v1/users", usersRouter);
 app.use("/api/v1/webhooks", webhookRouter);
 app.use("/api/v1/api-keys", apiKeyRouter);
+app.use("/api/v1/stats", statsRouter);
 
 app.use((_req, res) => {
   res.status(404).json({ error: "Route not found" });

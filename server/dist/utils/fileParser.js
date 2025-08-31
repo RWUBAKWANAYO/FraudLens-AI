@@ -47,12 +47,13 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.parseCSVBuffer = parseCSVBuffer;
 exports.parseExcelBuffer = parseExcelBuffer;
-exports.parsePDFBuffer = parsePDFBuffer;
 exports.parseJsonBuffer = parseJsonBuffer;
+exports.parsePDFBuffer = parsePDFBuffer;
 exports.parseBuffer = parseBuffer;
 const csv_parser_1 = __importDefault(require("csv-parser"));
 const XLSX = __importStar(require("xlsx"));
 const normalizeData_1 = require("./normalizeData");
+const uploadUtils_1 = require("../utils/uploadUtils");
 function parseCSVBuffer(buffer) {
     return __awaiter(this, void 0, void 0, function* () {
         const rows = [];
@@ -65,40 +66,8 @@ function parseCSVBuffer(buffer) {
             readable
                 .pipe((0, csv_parser_1.default)())
                 .on("data", (row) => {
-                const pick = (...keys) => {
-                    for (const k of keys) {
-                        if (row[k] != null && row[k] !== "")
-                            return row[k];
-                    }
-                    return undefined;
-                };
-                const amount = (0, normalizeData_1.normalizeAmount)(pick("amount", "Amount", "AMT", "total", "Total", "gross", "amount_captured")) || 0;
-                const partner = pick("partner", "vendor", "merchant", "Partner", "description", "Description", "business_name", "name", "account_name", "Merchant Name") || null;
-                const txId = pick("txId", "transaction_id", "invoice", "id", "charge_id", "payment_id", "Transaction ID") || null;
-                const date = (0, normalizeData_1.normalizeDate)(pick("date", "Date", "created", "timestamp", "time", "Created (UTC)") || null);
-                const currency = pick("currency", "Currency", "currency_code", "curr", "Currency Code") ||
-                    "USD";
-                rows.push({
-                    txId: txId || undefined,
-                    partner: partner || undefined,
-                    amount,
-                    date,
-                    email: pick("email", "Email", "customer_email", "Customer Email", "user_email") ||
-                        undefined,
-                    currency,
-                    description: pick("description", "Description", "memo", "notes", "Transaction Description") || undefined,
-                    status: pick("status", "Status", "state", "Transaction Status") || undefined,
-                    // identity/instrument hints
-                    user_id: pick("user_id", "userId", "UserId") || undefined,
-                    account: pick("account", "account_id") || undefined,
-                    card: pick("card", "card_number") || undefined,
-                    bank_account: pick("bank_account", "iban") || undefined,
-                    account_number: pick("account_number") || undefined,
-                    ip: pick("ip", "ip_address") || undefined,
-                    device: pick("device", "device_id", "device_fingerprint") || undefined,
-                    raw: row,
-                    embeddingJson: null,
-                });
+                const mapped = (0, uploadUtils_1.mapFields)(row);
+                rows.push(Object.assign(Object.assign({}, mapped), { embeddingJson: null }));
             })
                 .on("end", () => resolve(rows))
                 .on("error", (err) => reject(err));
@@ -111,35 +80,26 @@ function parseExcelBuffer(buffer) {
         const sheet = workbook.Sheets[workbook.SheetNames[0]];
         const json = XLSX.utils.sheet_to_json(sheet, { defval: "" });
         return json.map((row) => {
-            var _a;
-            const lower = Object.fromEntries(Object.entries(row).map(([k, v]) => [String(k).toLowerCase(), v]));
-            const pick = (...keys) => {
-                for (const k of keys)
-                    if (lower[k] != null && lower[k] !== "")
-                        return lower[k];
-                return undefined;
-            };
-            const dateVal = (0, normalizeData_1.normalizeDate)(pick("date", "created", "timestamp", "time"));
-            return {
-                txId: pick("txid", "transaction_id", "invoice", "id", "charge_id") || undefined,
-                partner: pick("partner", "vendor", "merchant", "business_name", "name") || undefined,
-                amount: (_a = (0, normalizeData_1.normalizeAmount)(pick("amount", "total", "amt", "value", "sum"))) !== null && _a !== void 0 ? _a : 0,
-                date: dateVal ? dateVal.toISOString() : undefined,
-                email: pick("email", "customer_email", "user_email") || undefined,
-                currency: pick("currency", "currency_code") || "USD",
-                description: pick("description", "memo", "notes") || undefined,
-                status: pick("status", "state") || undefined,
-                user_id: pick("user_id", "userid") || undefined,
-                account: pick("account", "account_id") || undefined,
-                card: pick("card", "card_number") || undefined,
-                bank_account: pick("bank_account", "iban") || undefined,
-                account_number: pick("account_number") || undefined,
-                ip: pick("ip", "ip_address") || undefined,
-                device: pick("device", "device_id", "device_fingerprint") || undefined,
-                raw: row,
-                embeddingJson: null,
-            };
+            const mapped = (0, uploadUtils_1.mapFields)(row);
+            return Object.assign(Object.assign({}, mapped), { embeddingJson: null });
         });
+    });
+}
+function parseJsonBuffer(buffer) {
+    return __awaiter(this, void 0, void 0, function* () {
+        try {
+            const jsonString = buffer.toString("utf8");
+            const jsonData = JSON.parse(jsonString);
+            const dataArray = Array.isArray(jsonData) ? jsonData : [jsonData];
+            return dataArray.map((item, index) => {
+                const mapped = (0, uploadUtils_1.mapFields)(item);
+                return Object.assign(Object.assign({}, mapped), { txId: mapped.txId || `json-file-${Date.now()}-${index}`, embeddingJson: null });
+            });
+        }
+        catch (error) {
+            console.error("Error parsing JSON file:", error);
+            throw new Error("Invalid JSON file format");
+        }
     });
 }
 function parsePDFBuffer(buffer) {
@@ -185,44 +145,6 @@ function parsePDFBuffer(buffer) {
         }
         console.log(`Parsed ${rows.length} records from PDF`);
         return rows;
-    });
-}
-function parseJsonBuffer(buffer) {
-    return __awaiter(this, void 0, void 0, function* () {
-        try {
-            const jsonString = buffer.toString("utf8");
-            const jsonData = JSON.parse(jsonString);
-            const dataArray = Array.isArray(jsonData) ? jsonData : [jsonData];
-            return dataArray.map((item, index) => {
-                const amount = typeof item.amount === "string"
-                    ? parseFloat(item.amount.replace(/[^\d.-]/g, ""))
-                    : Number(item.amount) || 0;
-                const date = item.date ? new Date(item.date).toISOString() : undefined;
-                return {
-                    txId: item.txId || `json-file-${Date.now()}-${index}`,
-                    partner: item.partner || undefined,
-                    amount,
-                    date,
-                    email: item.email || undefined,
-                    currency: item.currency || "USD",
-                    description: item.description || undefined,
-                    status: item.status || undefined,
-                    user_id: item.user_id || undefined,
-                    account: item.account || undefined,
-                    card: item.card || undefined,
-                    bank_account: item.bank_account || undefined,
-                    account_number: item.account_number || undefined,
-                    ip: item.ip || undefined,
-                    device: item.device || undefined,
-                    raw: item,
-                    embeddingJson: null,
-                };
-            });
-        }
-        catch (error) {
-            console.error("Error parsing JSON file:", error);
-            throw new Error("Invalid JSON file format");
-        }
     });
 }
 function parseBuffer(buffer, fileName) {

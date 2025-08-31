@@ -17,3 +17,22 @@ export type Parsed = {
   raw?: any;
   embeddingJson?: number[] | null;
 };
+
+export interface FieldMappingConfig {
+  transactionId?: string[];
+  partner?: string[];
+  amount?: string[];
+  date?: string[];
+  currency?: string[];
+  email?: string[];
+  description?: string[];
+  status?: string[];
+  userId?: string[];
+  account?: string[];
+  card?: string[];
+  bankAccount?: string[];
+  accountNumber?: string[];
+  ip?: string[];
+  device?: string[];
+  // Add more fields as needed
+}

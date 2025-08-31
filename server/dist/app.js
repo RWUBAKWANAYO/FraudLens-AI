@@ -12,6 +12,7 @@ const users_1 = require("./routes/users");
 const webhook_1 = require("./routes/webhook");
 const apiKey_1 = require("./routes/apiKey");
 const swagger_1 = require("./docs/swagger");
+const stats_1 = require("./routes/stats");
 const app = (0, express_1.default)();
 app.use((0, cors_1.default)());
 app.use(express_1.default.json());
@@ -21,6 +22,7 @@ app.use("/api/v1/auth", auth_1.authRouter);
 app.use("/api/v1/users", users_1.usersRouter);
 app.use("/api/v1/webhooks", webhook_1.webhookRouter);
 app.use("/api/v1/api-keys", apiKey_1.apiKeyRouter);
+app.use("/api/v1/stats", stats_1.statsRouter);
 app.use((_req, res) => {
     res.status(404).json({ error: "Route not found" });
 });

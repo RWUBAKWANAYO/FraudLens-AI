@@ -1,7 +1,8 @@
 import csvParser from "csv-parser";
 import * as XLSX from "xlsx";
-import { normalizeAmount, normalizeDate } from "./normalizeData";
+import { normalizeAmount } from "./normalizeData";
 import { Parsed } from "../types/fileParser";
+import { mapFields } from "../utils/uploadUtils";
 
 export async function parseCSVBuffer(buffer: Buffer): Promise<Parsed[]> {
   const rows: Parsed[] = [];
@@ -15,78 +16,9 @@ export async function parseCSVBuffer(buffer: Buffer): Promise<Parsed[]> {
     readable
       .pipe(csvParser())
       .on("data", (row) => {
-        const pick = (...keys: string[]) => {
-          for (const k of keys) {
-            if (row[k] != null && row[k] !== "") return row[k];
-          }
-          return undefined;
-        };
-
-        const amount =
-          normalizeAmount(
-            pick("amount", "Amount", "AMT", "total", "Total", "gross", "amount_captured")
-          ) || 0;
-
-        const partner =
-          pick(
-            "partner",
-            "vendor",
-            "merchant",
-            "Partner",
-            "description",
-            "Description",
-            "business_name",
-            "name",
-            "account_name",
-            "Merchant Name"
-          ) || null;
-
-        const txId =
-          pick(
-            "txId",
-            "transaction_id",
-            "invoice",
-            "id",
-            "charge_id",
-            "payment_id",
-            "Transaction ID"
-          ) || null;
-
-        const date = normalizeDate(
-          pick("date", "Date", "created", "timestamp", "time", "Created (UTC)") || null
-        ) as any;
-
-        const currency =
-          (pick("currency", "Currency", "currency_code", "curr", "Currency Code") as string) ||
-          "USD";
-
+        const mapped = mapFields(row);
         rows.push({
-          txId: txId || undefined,
-          partner: partner || undefined,
-          amount,
-          date,
-          email:
-            (pick("email", "Email", "customer_email", "Customer Email", "user_email") as string) ||
-            undefined,
-          currency,
-          description:
-            (pick(
-              "description",
-              "Description",
-              "memo",
-              "notes",
-              "Transaction Description"
-            ) as string) || undefined,
-          status: (pick("status", "Status", "state", "Transaction Status") as string) || undefined,
-          // identity/instrument hints
-          user_id: (pick("user_id", "userId", "UserId") as string) || undefined,
-          account: (pick("account", "account_id") as string) || undefined,
-          card: (pick("card", "card_number") as string) || undefined,
-          bank_account: (pick("bank_account", "iban") as string) || undefined,
-          account_number: (pick("account_number") as string) || undefined,
-          ip: (pick("ip", "ip_address") as string) || undefined,
-          device: (pick("device", "device_id", "device_fingerprint") as string) || undefined,
-          raw: row,
+          ...mapped,
           embeddingJson: null,
         });
       })
@@ -101,36 +33,32 @@ export async function parseExcelBuffer(buffer: Buffer): Promise<Parsed[]> {
   const json = XLSX.utils.sheet_to_json<any>(sheet, { defval: "" });
 
   return json.map((row: any) => {
-    const lower = Object.fromEntries(
-      Object.entries(row).map(([k, v]) => [String(k).toLowerCase(), v])
-    );
-    const pick = (...keys: string[]) => {
-      for (const k of keys) if (lower[k] != null && lower[k] !== "") return lower[k];
-      return undefined;
-    };
-    const dateVal = normalizeDate(pick("date", "created", "timestamp", "time"));
-
+    const mapped = mapFields(row);
     return {
-      txId: (pick("txid", "transaction_id", "invoice", "id", "charge_id") as string) || undefined,
-      partner:
-        (pick("partner", "vendor", "merchant", "business_name", "name") as string) || undefined,
-      amount: normalizeAmount(pick("amount", "total", "amt", "value", "sum")) ?? 0,
-      date: dateVal ? (dateVal as Date).toISOString() : undefined,
-      email: (pick("email", "customer_email", "user_email") as string) || undefined,
-      currency: (pick("currency", "currency_code") as string) || "USD",
-      description: (pick("description", "memo", "notes") as string) || undefined,
-      status: (pick("status", "state") as string) || undefined,
-      user_id: (pick("user_id", "userid") as string) || undefined,
-      account: (pick("account", "account_id") as string) || undefined,
-      card: (pick("card", "card_number") as string) || undefined,
-      bank_account: (pick("bank_account", "iban") as string) || undefined,
-      account_number: (pick("account_number") as string) || undefined,
-      ip: (pick("ip", "ip_address") as string) || undefined,
-      device: (pick("device", "device_id", "device_fingerprint") as string) || undefined,
-      raw: row,
+      ...mapped,
       embeddingJson: null,
     };
   });
+}
+
+export async function parseJsonBuffer(buffer: Buffer): Promise<Parsed[]> {
+  try {
+    const jsonString = buffer.toString("utf8");
+    const jsonData = JSON.parse(jsonString);
+    const dataArray = Array.isArray(jsonData) ? jsonData : [jsonData];
+
+    return dataArray.map((item: any, index: number) => {
+      const mapped = mapFields(item);
+      return {
+        ...mapped,
+        txId: mapped.txId || `json-file-${Date.now()}-${index}`,
+        embeddingJson: null,
+      };
+    });
+  } catch (error) {
+    console.error("Error parsing JSON file:", error);
+    throw new Error("Invalid JSON file format");
+  }
 }
 
 export async function parsePDFBuffer(buffer: Buffer): Promise<Parsed[]> {
@@ -179,47 +107,6 @@ export async function parsePDFBuffer(buffer: Buffer): Promise<Parsed[]> {
 
   console.log(`Parsed ${rows.length} records from PDF`);
   return rows;
-}
-
-export async function parseJsonBuffer(buffer: Buffer): Promise<Parsed[]> {
-  try {
-    const jsonString = buffer.toString("utf8");
-    const jsonData = JSON.parse(jsonString);
-
-    const dataArray = Array.isArray(jsonData) ? jsonData : [jsonData];
-
-    return dataArray.map((item: any, index: number) => {
-      const amount =
-        typeof item.amount === "string"
-          ? parseFloat(item.amount.replace(/[^\d.-]/g, ""))
-          : Number(item.amount) || 0;
-
-      const date = item.date ? new Date(item.date).toISOString() : undefined;
-
-      return {
-        txId: item.txId || `json-file-${Date.now()}-${index}`,
-        partner: item.partner || undefined,
-        amount,
-        date,
-        email: item.email || undefined,
-        currency: item.currency || "USD",
-        description: item.description || undefined,
-        status: item.status || undefined,
-        user_id: item.user_id || undefined,
-        account: item.account || undefined,
-        card: item.card || undefined,
-        bank_account: item.bank_account || undefined,
-        account_number: item.account_number || undefined,
-        ip: item.ip || undefined,
-        device: item.device || undefined,
-        raw: item,
-        embeddingJson: null,
-      };
-    });
-  } catch (error) {
-    console.error("Error parsing JSON file:", error);
-    throw new Error("Invalid JSON file format");
-  }
 }
 
 export async function parseBuffer(buffer: Buffer, fileName: string): Promise<Parsed[]> {
