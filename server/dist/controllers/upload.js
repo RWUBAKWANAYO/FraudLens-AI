@@ -25,8 +25,7 @@ function handleFileUpload(req, res, next) {
             }
             if (req.body.data) {
                 try {
-                    const data = (0, uploadUtils_1.parseJsonData)(req.body.data);
-                    const result = yield (0, jsonProcessor_1.processJsonData)(data, companyId, req.body.fileName || "direct-data-upload");
+                    const result = yield (0, jsonProcessor_1.processJsonData)(req.body.data, companyId, req.body.fileName || "direct-data-upload");
                     return res.json(result);
                 }
                 catch (error) {

@@ -3,7 +3,7 @@ import { processFileUpload } from "../services/uploadProcessor";
 import { processJsonData } from "../services/jsonProcessor";
 import { ErrorHandler } from "../utils/errorHandler";
 import { getUploadsList } from "../services/uploadService";
-import { parseJsonData, validateUploadFile } from "../utils/uploadUtils";
+import { validateUploadFile } from "../utils/uploadUtils";
 
 export async function handleFileUpload(req: Request, res: Response, next: NextFunction) {
   try {
@@ -14,9 +14,8 @@ export async function handleFileUpload(req: Request, res: Response, next: NextFu
 
     if (req.body.data) {
       try {
-        const data = parseJsonData(req.body.data);
         const result = await processJsonData(
-          data,
+          req.body.data,
           companyId,
           req.body.fileName || "direct-data-upload"
         );

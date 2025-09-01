@@ -1,15 +1,90 @@
 export const auditSchemas = {
+  DataUploadRequest: {
+    type: "object",
+    required: ["data"],
+    properties: {
+      data: {
+        type: "object",
+        required: ["txId", "partner", "amount", "date", "currency"],
+        properties: {
+          txId: {
+            type: "string",
+            example: "463dghjd4637s4647a587685",
+            description: "Transaction ID",
+          },
+          partner: {
+            type: "string",
+            example: "John Wayne",
+            description: "Transaction partner",
+          },
+          amount: {
+            type: "number",
+            example: 4000,
+            description: "Transaction amount",
+          },
+          date: {
+            type: "string",
+            format: "date",
+            example: "2025-09-01",
+            description: "Transaction date",
+          },
+          currency: {
+            type: "string",
+            example: "USD",
+            description: "Transaction currency",
+          },
+          ip: {
+            type: "string",
+            example: "192.168.1.1",
+            description: "IP address",
+            nullable: true,
+          },
+          device: {
+            type: "string",
+            example: "Chrome Browser",
+            description: "Device information",
+            nullable: true,
+          },
+          geoCountry: {
+            type: "string",
+            example: "US",
+            description: "Geographic country",
+            nullable: true,
+          },
+          geoCity: {
+            type: "string",
+            example: "New York",
+            description: "Geographic city",
+            nullable: true,
+          },
+          mcc: {
+            type: "string",
+            example: "5942",
+            description: "Merchant category code",
+            nullable: true,
+          },
+          channel: {
+            type: "string",
+            example: "web",
+            description: "Transaction channel",
+            nullable: true,
+          },
+        },
+      },
+    },
+  },
+
   FileUploadResponse: {
     type: "object",
     properties: {
       uploadId: {
         type: "string",
         format: "uuid",
-        example: "590cbfd1-a2f2-449b-8884-aa6deed3257d",
+        example: "2de228b2-f7db-4da7-a83f-03e0cb050e3e",
       },
       recordsAnalyzed: {
         type: "integer",
-        example: 5,
+        example: 1,
       },
       threats: {
         type: "array",
@@ -23,7 +98,7 @@ export const auditSchemas = {
         properties: {
           totalRecords: {
             type: "integer",
-            example: 5,
+            example: 1,
           },
           flagged: {
             type: "integer",
@@ -36,7 +111,8 @@ export const auditSchemas = {
           message: {
             type: "string",
             example:
-              "File uploaded successfully. 5 records queued for processing. Threats will be detected asynchronously.",
+              "Data uploaded successfully. 1 record queued for processing. Threats will be detected asynchronously.",
+            nullable: true,
           },
         },
       },
@@ -404,6 +480,125 @@ export const auditSchemas = {
         type: "string",
         enum: ["generated", "manual"],
         example: "generated",
+      },
+    },
+  },
+  UploadHistoryItem: {
+    type: "object",
+    properties: {
+      id: {
+        type: "string",
+        format: "uuid",
+        example: "ec45f4f5-165c-40ac-8c57-6a903aceb063",
+      },
+      fileName: {
+        type: "string",
+        example: "transactions.json",
+      },
+      fileType: {
+        type: "string",
+        example: "application/json",
+      },
+      fileSize: {
+        type: "integer",
+        example: 551,
+      },
+      status: {
+        type: "string",
+        enum: ["pending", "processing", "completed", "failed"],
+        example: "completed",
+      },
+      createdAt: {
+        type: "string",
+        format: "date-time",
+        example: "2025-08-31T20:50:21.693Z",
+      },
+      completedAt: {
+        type: "string",
+        format: "date-time",
+        example: "2025-08-31T20:50:46.674Z",
+        nullable: true,
+      },
+      publicId: {
+        type: "string",
+        example:
+          "fraud-detection/company/ca5df2e2-abc2-4542-8328-3a19ee1a1cc0/uploads/transactions.json",
+      },
+      resourceType: {
+        type: "string",
+        nullable: true,
+        example: null,
+      },
+      _count: {
+        type: "object",
+        properties: {
+          records: {
+            type: "integer",
+            example: 5,
+          },
+          threats: {
+            type: "integer",
+            example: 1,
+          },
+        },
+      },
+    },
+  },
+  UploadHistoryResponse: {
+    type: "object",
+    properties: {
+      uploads: {
+        type: "array",
+        items: {
+          $ref: "#/components/schemas/UploadHistoryItem",
+        },
+      },
+      pagination: {
+        $ref: "#/components/schemas/Pagination",
+      },
+    },
+  },
+  AlertsListResponse: {
+    type: "object",
+    properties: {
+      data: {
+        type: "array",
+        items: {
+          $ref: "#/components/schemas/Alert",
+        },
+      },
+      pagination: {
+        $ref: "#/components/schemas/Pagination",
+      },
+      total: {
+        type: "integer",
+        example: 100,
+      },
+      filtered: {
+        type: "integer",
+        example: 25,
+      },
+    },
+  },
+  ThreatsListResponse: {
+    type: "object",
+    properties: {
+      data: {
+        type: "array",
+        items: {
+          $ref: "#/components/schemas/Threat",
+        },
+      },
+      pagination: {
+        $ref: "#/components/schemas/Pagination",
+      },
+      total: {
+        type: "integer",
+        example: 100,
+      },
+      filtered: {
+        type: "integer",
+        example: 25,
       },
     },
   },

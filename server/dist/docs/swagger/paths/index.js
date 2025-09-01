@@ -6,4 +6,5 @@ const auth_1 = require("./auth");
 const users_1 = require("./users");
 const webhooks_1 = require("./webhooks");
 const audit_1 = require("./audit");
-exports.allPaths = Object.assign(Object.assign(Object.assign(Object.assign(Object.assign({}, auth_1.authPaths), apiKeys_1.apiKeyPaths), users_1.userPaths), webhooks_1.webhookPaths), audit_1.auditPaths);
+const stats_1 = require("./stats");
+exports.allPaths = Object.assign(Object.assign(Object.assign(Object.assign(Object.assign(Object.assign({}, auth_1.authPaths), apiKeys_1.apiKeyPaths), users_1.userPaths), webhooks_1.webhookPaths), audit_1.auditPaths), stats_1.statsPaths);

@@ -7,4 +7,5 @@ const apiKey_1 = require("./apiKey");
 const user_1 = require("./user");
 const webhook_1 = require("./webhook");
 const audit_1 = require("./audit");
-exports.allResponses = Object.assign(Object.assign(Object.assign(Object.assign(Object.assign(Object.assign({}, common_1.commonResponses), auth_1.authResponses), apiKey_1.apiKeyResponses), user_1.userResponses), webhook_1.webhookResponses), audit_1.auditResponses);
+const stats_1 = require("./stats");
+exports.allResponses = Object.assign(Object.assign(Object.assign(Object.assign(Object.assign(Object.assign(Object.assign({}, common_1.commonResponses), auth_1.authResponses), apiKey_1.apiKeyResponses), user_1.userResponses), webhook_1.webhookResponses), audit_1.auditResponses), stats_1.statsResponses);

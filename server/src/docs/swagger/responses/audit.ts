@@ -1,10 +1,46 @@
 export const auditResponses = {
   FileUploadSuccess: {
-    description: "File uploaded successfully",
+    description: "File or data uploaded successfully",
     content: {
       "application/json": {
         schema: {
           $ref: "#/components/schemas/FileUploadResponse",
+        },
+      },
+    },
+  },
+  UploadHistorySuccess: {
+    description: "Upload history retrieved successfully",
+    content: {
+      "application/json": {
+        schema: {
+          $ref: "#/components/schemas/UploadHistoryResponse",
+        },
+      },
+    },
+  },
+  DownloadSuccess: {
+    description: "File downloaded successfully",
+    content: {
+      "text/csv": {
+        schema: {
+          type: "string",
+          example:
+            "txId,partner,amount,currency,date,ip,device,geoCountry,geoCity,mcc,channel\nTX1001,Amazon,149.99,USD,2023-05-15,192.168.1.1,Chrome Browser,US,Seattle,5942,web",
+        },
+      },
+      "application/json": {
+        schema: {
+          type: "array",
+          items: {
+            type: "object",
+          },
+        },
+      },
+      xlsx: {
+        schema: {
+          type: "string",
+          format: "binary",
         },
       },
     },
@@ -14,26 +50,7 @@ export const auditResponses = {
     content: {
       "application/json": {
         schema: {
-          type: "object",
-          properties: {
-            data: {
-              type: "array",
-              items: {
-                $ref: "#/components/schemas/Alert",
-              },
-            },
-            pagination: {
-              $ref: "#/components/schemas/Pagination",
-            },
-            total: {
-              type: "integer",
-              example: 100,
-            },
-            filtered: {
-              type: "integer",
-              example: 25,
-            },
-          },
+          $ref: "#/components/schemas/AlertsListResponse",
         },
       },
     },
@@ -43,26 +60,7 @@ export const auditResponses = {
     content: {
       "application/json": {
         schema: {
-          type: "object",
-          properties: {
-            data: {
-              type: "array",
-              items: {
-                $ref: "#/components/schemas/Threat",
-              },
-            },
-            pagination: {
-              $ref: "#/components/schemas/Pagination",
-            },
-            total: {
-              type: "integer",
-              example: 100,
-            },
-            filtered: {
-              type: "integer",
-              example: 25,
-            },
-          },
+          $ref: "#/components/schemas/ThreatsListResponse",
         },
       },
     },

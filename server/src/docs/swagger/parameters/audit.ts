@@ -10,6 +10,17 @@ export const auditParameters = {
     },
     description: "Threat identifier",
   },
+  UploadIdParam: {
+    name: "uploadId",
+    in: "path",
+    required: true,
+    schema: {
+      type: "string",
+      format: "uuid",
+      example: "ec45f4f5-165c-40ac-8c57-6a903aceb063",
+    },
+    description: "Upload identifier",
+  },
   AlertStatusParam: {
     name: "status",
     in: "query",
@@ -30,6 +41,16 @@ export const auditParameters = {
     },
     description: "Filter threats by status",
   },
+  FileStatusParam: {
+    name: "status",
+    in: "query",
+    required: false,
+    schema: {
+      type: "string",
+      enum: ["pending", "processing", "completed", "failed"],
+    },
+    description: "Filter uploads by status",
+  },
   SeverityParam: {
     name: "severity",
     in: "query",
@@ -46,16 +67,29 @@ export const auditParameters = {
     required: false,
     schema: {
       type: "string",
-      enum: [
-        "DUP_IN_BATCH__TXID",
-        "DUP_IN_DB__TXID",
-        "DUP_IN_BATCH__CANONICAL",
-        "DUP_IN_DB__CANONICAL",
-        "RULE_TRIGGER",
-        "SIMILARITY_MATCH",
-      ],
+      enum: ["DUP_IN_DB__TXID", "OTHER_THREAT_TYPE"],
     },
     description: "Filter by threat type",
+  },
+  FileTypeParam: {
+    name: "fileType",
+    in: "query",
+    required: false,
+    schema: {
+      type: "string",
+      enum: ["text/csv", "application/json", "xlsx"],
+    },
+    description: "Filter by file type",
+  },
+  FileNameParam: {
+    name: "fileName",
+    in: "query",
+    required: false,
+    schema: {
+      type: "string",
+      example: "transactions.csv",
+    },
+    description: "Filter by file name",
   },
   RecordIdParam: {
     name: "recordId",
@@ -67,17 +101,6 @@ export const auditParameters = {
       example: "ff86400f-9c21-4d56-a02a-fd5af83d4ef7",
     },
     description: "Filter by record identifier",
-  },
-  UploadIdParam: {
-    name: "uploadId",
-    in: "query",
-    required: false,
-    schema: {
-      type: "string",
-      format: "uuid",
-      example: "efa788be-a350-44aa-af5a-d7deb544cbef",
-    },
-    description: "Filter by upload identifier",
   },
   SearchParam: {
     name: "search",
@@ -95,7 +118,15 @@ export const auditParameters = {
     required: false,
     schema: {
       type: "string",
-      enum: ["createdAt", "updatedAt", "confidenceScore", "severity"],
+      enum: [
+        "createdAt",
+        "updatedAt",
+        "confidenceScore",
+        "severity",
+        "fileName",
+        "fileSize",
+        "completedAt",
+      ],
       default: "createdAt",
     },
     description: "Field to sort results by",
