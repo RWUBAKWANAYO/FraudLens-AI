@@ -60,52 +60,36 @@ class ThreatService {
     }
     static getThreatDetails(threatId) {
         return __awaiter(this, void 0, void 0, function* () {
-            var _a, _b, _c;
+            var _a;
             const threat = yield this.findById(threatId);
             if (!threat) {
                 throw new Error("Threat not found");
             }
             const metadata = threat.metadata;
             if (metadata === null || metadata === void 0 ? void 0 : metadata.aiExplanation) {
-                return {
-                    threat: {
-                        id: threat.id,
-                        threatType: threat.threatType,
-                        confidenceScore: threat.confidenceScore,
-                        createdAt: threat.createdAt,
-                        description: threat.description,
-                    },
-                    explanation: metadata.aiExplanation,
-                    record: threat.record,
-                    source: "cached",
-                };
+                return threat;
             }
-            const context = (metadata === null || metadata === void 0 ? void 0 : metadata.aiContext) || {
-                threatType: threat.threatType,
-                amount: (_a = threat.record) === null || _a === void 0 ? void 0 : _a.amount,
-                partner: (_b = threat.record) === null || _b === void 0 ? void 0 : _b.partner,
-                txId: (_c = threat.record) === null || _c === void 0 ? void 0 : _c.txId,
-                additionalContext: metadata === null || metadata === void 0 ? void 0 : metadata.context,
+            const context = {
+                threat: {
+                    threatType: threat === null || threat === void 0 ? void 0 : threat.threatType,
+                    description: threat === null || threat === void 0 ? void 0 : threat.description,
+                    confidenceScore: threat === null || threat === void 0 ? void 0 : threat.confidenceScore,
+                    recordId: threat === null || threat === void 0 ? void 0 : threat.recordId,
+                    uploadId: threat === null || threat === void 0 ? void 0 : threat.uploadId,
+                },
+                record: threat.record,
+                upload: threat.upload,
+                additionalContext: (_a = metadata === null || metadata === void 0 ? void 0 : metadata.aiContext) === null || _a === void 0 ? void 0 : _a.additionalContext,
             };
             const detailedExplanation = yield (0, leakExplanation_1.generateDetailedExplanation)(context);
-            const updatedThreat = yield db_1.prisma.threat.update({
+            yield db_1.prisma.threat.update({
                 where: { id: threatId },
                 data: {
                     metadata: Object.assign(Object.assign({}, metadata), { aiExplanation: detailedExplanation, aiGeneratedAt: new Date().toISOString(), aiExplanationGenerated: true }),
                 },
-                include: { record: true },
             });
             return {
-                threat: {
-                    id: updatedThreat.id,
-                    threatType: updatedThreat.threatType,
-                    confidenceScore: updatedThreat.confidenceScore,
-                    createdAt: updatedThreat.createdAt,
-                    description: updatedThreat.description,
-                },
-                explanation: detailedExplanation,
-                record: updatedThreat.record,
-                source: "generated",
+                threat: Object.assign(Object.assign({}, threat), { metadata: Object.assign(Object.assign({}, metadata), { aiExplanation: detailedExplanation, aiGeneratedAt: new Date().toISOString(), aiExplanationGenerated: true }) }),
             };
         });
     }

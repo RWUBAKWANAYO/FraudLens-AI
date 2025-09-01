@@ -33,7 +33,26 @@ exports.WEBHOOK_QUEUE = "webhook.deliveries";
 exports.WEBHOOK_RETRY_QUEUE = "webhook.retries";
 exports.WEBHOOK_DLQ = "webhook.dead_letter";
 exports.THREAT_INCLUDE = {
-    record: true,
+    record: {
+        select: {
+            id: true,
+            companyId: true,
+            uploadId: true,
+            txId: true,
+            partner: true,
+            amount: true,
+            currency: true,
+            date: true,
+            ip: true,
+            device: true,
+            geoCountry: true,
+            geoCity: true,
+            mcc: true,
+            channel: true,
+            createdAt: true,
+            updatedAt: true,
+        },
+    },
     upload: {
         select: {
             fileName: true,
@@ -62,6 +81,14 @@ exports.ALERT_INCLUDE = {
             partner: true,
             amount: true,
             currency: true,
+        },
+    },
+    upload: {
+        select: {
+            fileName: true,
+            fileType: true,
+            fileSize: true,
+            publicId: true,
         },
     },
 };

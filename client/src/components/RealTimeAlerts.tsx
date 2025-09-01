@@ -22,7 +22,7 @@ export default function RealTimeAlerts({ companyId }: { companyId: string }) {
     })
       .then((res) => res.json())
       .then((data) => {
-        setAlerts(data.slice(0, 20));
+        setAlerts(data?.data);
       })
       .catch((err) => console.error("Failed to load alerts:", err));
   }, [companyId]);

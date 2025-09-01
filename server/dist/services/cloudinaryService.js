@@ -20,7 +20,6 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
 };
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.CloudinaryService = void 0;
-// server/src/services/cloudinaryService.ts
 const cloudinary_1 = require("cloudinary");
 const node_fetch_1 = __importDefault(require("node-fetch"));
 cloudinary_1.v2.config({
@@ -33,16 +32,22 @@ class CloudinaryService {
     static uploadBuffer(buffer, fileName, folder) {
         return __awaiter(this, void 0, void 0, function* () {
             return new Promise((resolve, reject) => {
+                const fileExtension = fileName.split(".").pop();
+                const baseName = fileName.replace(/\.[^/.]+$/, "");
+                const uniqueId = crypto.randomUUID();
+                const uniquePublicId = `${baseName}_${uniqueId}${fileExtension ? `.${fileExtension}` : ""}`;
                 const uploadStream = cloudinary_1.v2.uploader.upload_stream({
                     resource_type: "auto",
                     folder: `${process.env.CLOUDINARY_UPLOAD_DIRECTORY}/${folder}`,
-                    public_id: fileName.replace(/\.[^/.]+$/, ""),
+                    public_id: uniquePublicId,
                     filename_override: fileName,
-                    use_filename: true,
+                    use_filename: false,
                     unique_filename: true,
                     allowed_formats: ["pdf", "doc", "docx", "xls", "xlsx", "csv", "json", "txt"],
+                    timeout: 30000,
                 }, (error, result) => {
                     if (error) {
+                        console.error("Cloudinary upload error:", error);
                         reject(error);
                     }
                     else if (result) {
@@ -54,8 +59,12 @@ class CloudinaryService {
                         });
                     }
                     else {
-                        reject(new Error("Upload failed"));
+                        reject(new Error("Upload failed with no error or result"));
                     }
+                });
+                uploadStream.on("error", (error) => {
+                    console.error("Cloudinary stream error:", error);
+                    reject(error);
                 });
                 const bufferStream = require("stream").PassThrough();
                 bufferStream.end(buffer);

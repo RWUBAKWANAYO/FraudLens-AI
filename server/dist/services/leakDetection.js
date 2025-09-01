@@ -88,6 +88,7 @@ function detectLeaks(records, uploadId, companyId, onProgress) {
                     data: {
                         companyId,
                         recordId: anchor.id,
+                        uploadId,
                         threatId: t.id,
                         title: ruleId.replace(/_/g, " "),
                         summary: t.description || "",

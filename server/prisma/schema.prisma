@@ -126,6 +126,7 @@ model Upload {
   records Record[]
   threats Threat[]
   company Company  @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  Alert   Alert[]
 
   @@index([companyId, fileHash, createdAt])
   @@index([status])
@@ -205,6 +206,7 @@ model Alert {
   companyId String
   recordId  String?
   threatId  String?
+  uploadId  String?
   severity  String   @default("medium")
   title     String
   summary   String   @db.Text
@@ -215,10 +217,12 @@ model Alert {
   company   Company  @relation(fields: [companyId], references: [id], onDelete: Cascade)
   record    Record?  @relation(fields: [recordId], references: [id])
   threat    Threat?  @relation(fields: [threatId], references: [id])
+  upload    Upload?  @relation(fields: [uploadId], references: [id])
 
   @@index([companyId, createdAt])
   @@index([recordId], map: "Alert_recordId_fkey")
   @@index([threatId], map: "Alert_threatId_fkey")
+  @@index([uploadId])
 }
 
 model WebhookSubscription {

@@ -11,43 +11,99 @@ const openaiClient = USE_LOCAL_AI
       apiKey: process.env.OPENAI_API_KEY,
     });
 
+type Formatter = (ctx: ThreatContext) => {
+  evidence: string;
+  static: string;
+};
+
+const money = (v: any, cur?: string) => (v ? `${cur || "USD"} ${Number(v).toFixed(2)}` : "N/A");
+
+const explanationMap: Record<string, Formatter> = {
+  DUP_IN_BATCH__TXID: (ctx) => {
+    const a = ctx.additionalContext || {};
+    return {
+      evidence: `Duplicate TX ${ctx.txId} found ${
+        a.countInUpload || a.priorCount
+      } times. Value: ${money(ctx.amount || a.amount, ctx.currency || a.currency)}.`,
+      static: `Duplicate transaction ID ${ctx.txId} detected ${
+        a.countInUpload || a.priorCount
+      } times. Total: ${money(ctx.amount || a.amount, ctx.currency || a.currency)}.`,
+    };
+  },
+  DUP_IN_DB__TXID: (ctx) => {
+    const a = ctx.additionalContext || {};
+    return {
+      evidence: `TX ${ctx.txId} matches ${a.priorCount} prior records. Cluster: ${money(
+        ctx.amount || a.amount,
+        ctx.currency || a.currency
+      )}.`,
+      static: `Transaction ID ${ctx.txId} matches ${
+        a.priorCount
+      } previous records. Cluster value: ${money(
+        ctx.amount || a.amount,
+        ctx.currency || a.currency
+      )}.`,
+    };
+  },
+  DUP_IN_BATCH__CANONICAL: (ctx) => {
+    const a = ctx.additionalContext || {};
+    return {
+      evidence: `Similar payment pattern detected ${
+        a.countInUpload || a.priorCount
+      } times. Value: ${money(ctx.amount || a.amount, ctx.currency || a.currency)}.`,
+      static: `Similar payment pattern detected ${
+        a.countInUpload || a.priorCount
+      } times. Total: ${money(ctx.amount || a.amount, ctx.currency || a.currency)}.`,
+    };
+  },
+  DUP_IN_DB__CANONICAL: (ctx) => {
+    const a = ctx.additionalContext || {};
+    return {
+      evidence: `Payment pattern matches ${
+        a.countInUpload || a.priorCount
+      } historical records. Cluster: ${money(ctx.amount || a.amount, ctx.currency || a.currency)}.`,
+      static: `Payment pattern matches ${
+        a.countInUpload || a.priorCount
+      } historical records. Cluster value: ${money(
+        ctx.amount || a.amount,
+        ctx.currency || a.currency
+      )}.`,
+    };
+  },
+  SIMILARITY_MATCH: (ctx) => {
+    const a = ctx.additionalContext || {};
+    const sim = a.similarity?.toFixed(2) || "high";
+    return {
+      evidence: `Transaction resembles known patterns (similarity: ${sim}).`,
+      static: `Transaction resembles known patterns (similarity: ${sim}).`,
+    };
+  },
+  RULE_TRIGGER: (ctx) => {
+    const a = ctx.additionalContext || {};
+    return {
+      evidence: `Triggered custom rule: ${a.ruleName || "unknown rule"}.`,
+      static: `Triggered custom rule: ${a.ruleName || "unknown rule"}.`,
+    };
+  },
+  default: (ctx) => ({
+    evidence: `Suspicious activity detected for ${ctx.txId || "transaction"}.`,
+    static: `Suspicious activity detected for ${ctx.txId || "transaction"}.`,
+  }),
+};
+
 export function generateStaticExplanation(context: ThreatContext): string {
-  const { threatType, additionalContext: a = {} } = context;
-
-  const money = (v: any, cur?: string) =>
-    v != null ? `${cur || "USD"} ${Number(v).toFixed(2)}` : "N/A";
-
-  const templates = {
-    DUP_IN_BATCH__TXID: () =>
-      `Duplicate transaction ID ${context.txId} detected ${a.countInUpload} times. ` +
-      `Total: ${money(a.fullAmountSum, a.currency)}.`,
-
-    DUP_IN_DB__TXID: () =>
-      `Transaction ID ${context.txId} matches ${a.priorCount} previous records. ` +
-      `Cluster value: ${money(a.fullAmountSum, a.currency)}.`,
-
-    DUP_IN_BATCH__CANONICAL: () =>
-      `Similar payment pattern detected ${a.countInUpload} times. ` +
-      `Total: ${money(a.fullAmountSum, a.currency)}.`,
-
-    DUP_IN_DB__CANONICAL: () =>
-      `Payment pattern matches ${a.priorCount} historical records. ` +
-      `Cluster value: ${money(a.fullAmountSum, a.currency)}.`,
-
-    SIMILARITY_MATCH: () =>
-      `Transaction resembles known patterns (similarity: ${a.similarity?.toFixed(2) || "high"}).`,
-
-    RULE_TRIGGER: () => `Triggered custom rule: ${a.ruleName || "unknown rule"}.`,
-
-    default: () => `Suspicious activity detected for transaction ${context.txId || "N/A"}.`,
-  };
-
-  return (templates[threatType as keyof typeof templates] || templates.default)();
+  const formatter = explanationMap[context.threatType] || explanationMap.default;
+  return formatter(context).static;
 }
 
-export async function generateDetailedExplanation(context: ThreatContext): Promise<string> {
+export async function generateDetailedExplanation(context: any): Promise<string> {
   try {
-    const evidence = buildEvidenceMessage(context);
+    const evidence = buildEvidenceMessage({
+      ...context.record,
+      threatType: context.threat?.threatType,
+      additionalContext: context.additionalContext,
+    } as any);
+
     const prompt = buildOpenAIPrompt(context, evidence);
     const aiText = await callLLM(prompt);
 
@@ -59,33 +115,78 @@ export async function generateDetailedExplanation(context: ThreatContext): Promi
 }
 
 function buildEvidenceMessage(ctx: ThreatContext): string {
-  const { threatType, additionalContext: a = {} } = ctx;
-  const money = (v: any, cur?: string) =>
-    v != null ? `${cur || "USD"} ${Number(v).toFixed(2)}` : "N/A";
-
-  switch (threatType) {
-    case "DUP_IN_BATCH__TXID":
-      return `Duplicate TX ${ctx.txId} found ${a.countInUpload} times. Value: ${money(
-        a.fullAmountSum,
-        a.currency
-      )}.`;
-    case "DUP_IN_DB__TXID":
-      return `TX ${ctx.txId} matches ${a.priorCount} prior records. Cluster: ${money(
-        a.fullAmountSum,
-        a.currency
-      )}.`;
-    // ... other cases
-    default:
-      return `Suspicious activity detected for ${ctx.txId || "transaction"}.`;
-  }
+  const formatter = explanationMap[ctx.threatType] || explanationMap.default;
+  return formatter(ctx).evidence;
 }
 
-function buildOpenAIPrompt(_context: ThreatContext, evidence: string): string {
-  return `As a financial risk analyst, provide a comprehensive 3-4 sentence analysis:
+function buildOpenAIPrompt(context: any, evidence: string): string {
+  const safe = (obj: any) => JSON.stringify(obj ?? {}, null, 2);
+  return `You are a senior financial risk analyst writing for an investigations dashboard used by fraud and compliance teams.
 
-EVIDENCE: ${evidence}
+Use ONLY the information in EVIDENCE, THREAT, RECORD, CONTEXT, and UPLOAD. 
+- Do NOT invent missing facts. If a value is missing or null, write “Unknown”.
+- Keep the tone concise and professional, free of hedging or disclaimers.
+- Dates must be ISO 8601. Currency: use the currency provided, otherwise “USD”.
+- Audience: risk analysts and ops. Focus on why it was flagged and what to do next.
 
-ANALYSIS: Explain the risk, investigation steps, and recommended actions.`;
+EVIDENCE:
+${evidence}
+
+THREAT (JSON):
+${safe(context?.threat)}
+
+RECORD (JSON):
+${safe(context?.record)}
+
+UPLOAD (JSON):
+${safe(context?.upload)}
+
+ADDITIONAL CONTEXT (JSON):
+${safe(context?.additionalContext)}
+
+Output STRICTLY in GitHub-flavored Markdown with the following sections and nothing else (no preamble, no code fences):
+
+## Summary
+• One-sentence plain-English reason this was flagged (reference txId, threatType, and where duplicates were found).
+
+## Why this was flagged
+• Bullet points citing the exact facts (e.g., priorCount, priorIds (redact to last 6 chars), amount, currency, partner, datasetStats (mean, max, totalRecords), and any cluster/aggregate values present).
+
+## Risk & Severity
+• Severity = start from confidenceScore:
+  - >= 0.95 → Critical
+  - 0.85–0.94 → High
+  - 0.70–0.84 → Medium
+  - < 0.70 → Low
+• Adjust +1 level if (priorCount ≥ 3) OR (amount > 2 × datasetStats.mean). 
+• Adjust −1 level if (priorCount = 1) AND (amount < 0.25 × datasetStats.mean).
+• State final severity and a one-line rationale referencing concrete values.
+
+## Recommended actions (priority)
+1) Immediate containment (e.g., hold/suspend related transactions tied to txId/partner if policy allows).
+2) Dedup validation (search for same txId across recent uploads and historical DB; confirm if legitimate reprocessing/refund).
+3) Merchant/partner checks (review Partner controls, recent incident tickets, allowlist/rollback procedures).
+4) Data quality & rule tuning (confirm canonicalization and txId normalization; review dedup window and thresholds).
+5) Logging & audit (link recordId, upload fileName, time; add case note and assign owner).
+
+## False-positive checks
+• Common benign reasons this alert could appear (e.g., batch retries, settlement replays, partial-capture workflows, test transactions), and how to quickly confirm/clear them using available fields.
+
+## Evidence (verbatim)
+• txId: <value>
+• threatType: <value>
+• confidenceScore: <value 0–1>
+• amount & currency: <value>
+• partner: <value>
+• priorCount: <value>
+• priorIds (redacted to last 6 chars): <values or “Unknown”>
+• cluster/aggregate value (if provided): <value or “Unknown”>
+• datasetStats: mean=<value>, max=<value>, totalRecords=<value>
+• recordId: <value>
+• upload.fileName: <value or “Unknown”>
+
+Word limit: 180–230 words total. 
+Never include backticks or any text outside the sections above.`;
 }
 
 async function callLLM(prompt: string): Promise<string> {

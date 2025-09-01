@@ -37,7 +37,26 @@ export const WEBHOOK_RETRY_QUEUE = "webhook.retries";
 export const WEBHOOK_DLQ = "webhook.dead_letter";
 
 export const THREAT_INCLUDE = {
-  record: true,
+  record: {
+    select: {
+      id: true,
+      companyId: true,
+      uploadId: true,
+      txId: true,
+      partner: true,
+      amount: true,
+      currency: true,
+      date: true,
+      ip: true,
+      device: true,
+      geoCountry: true,
+      geoCity: true,
+      mcc: true,
+      channel: true,
+      createdAt: true,
+      updatedAt: true,
+    },
+  },
   upload: {
     select: {
       fileName: true,
@@ -68,6 +87,14 @@ export const ALERT_INCLUDE = {
       partner: true,
       amount: true,
       currency: true,
+    },
+  },
+  upload: {
+    select: {
+      fileName: true,
+      fileType: true,
+      fileSize: true,
+      publicId: true,
     },
   },
 } satisfies Prisma.AlertInclude;

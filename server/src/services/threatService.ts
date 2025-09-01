@@ -66,31 +66,25 @@ export class ThreatService {
     const metadata = threat.metadata as any;
 
     if (metadata?.aiExplanation) {
-      return {
-        threat: {
-          id: threat.id,
-          threatType: threat.threatType,
-          confidenceScore: threat.confidenceScore,
-          createdAt: threat.createdAt,
-          description: threat.description,
-        },
-        explanation: metadata.aiExplanation,
-        record: threat.record,
-        source: "cached" as const,
-      };
+      return threat;
     }
 
-    const context = metadata?.aiContext || {
-      threatType: threat.threatType,
-      amount: threat.record?.amount,
-      partner: threat.record?.partner,
-      txId: threat.record?.txId,
-      additionalContext: metadata?.context,
+    const context = {
+      threat: {
+        threatType: threat?.threatType,
+        description: threat?.description,
+        confidenceScore: threat?.confidenceScore,
+        recordId: threat?.recordId,
+        uploadId: threat?.uploadId,
+      },
+      record: threat.record,
+      upload: threat.upload,
+      additionalContext: metadata?.aiContext?.additionalContext as any,
     };
 
     const detailedExplanation = await generateDetailedExplanation(context);
 
-    const updatedThreat = await prisma.threat.update({
+    await prisma.threat.update({
       where: { id: threatId },
       data: {
         metadata: {
@@ -100,20 +94,18 @@ export class ThreatService {
           aiExplanationGenerated: true,
         },
       },
-      include: { record: true },
     });
 
     return {
       threat: {
-        id: updatedThreat.id,
-        threatType: updatedThreat.threatType,
-        confidenceScore: updatedThreat.confidenceScore,
-        createdAt: updatedThreat.createdAt,
-        description: updatedThreat.description,
+        ...threat,
+        metadata: {
+          ...metadata,
+          aiExplanation: detailedExplanation,
+          aiGeneratedAt: new Date().toISOString(),
+          aiExplanationGenerated: true,
+        },
       },
-      explanation: detailedExplanation,
-      record: updatedThreat.record,
-      source: "generated" as const,
     };
   }
 

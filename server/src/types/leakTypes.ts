@@ -4,6 +4,8 @@ import { SEVERITY } from "../utils/constants";
 export type ThreatContext = {
   threatType: string;
   amount: number | null;
+  prioCount?: number | string;
+  currency?: string;
   partner: string | null;
   txId: string | null;
   datasetStats?: { mean: number; max: number; totalRecords: number };

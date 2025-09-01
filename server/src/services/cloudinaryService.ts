@@ -1,4 +1,3 @@
-// server/src/services/cloudinaryService.ts
 import { v2 as cloudinary } from "cloudinary";
 import fetch from "node-fetch";
 
@@ -23,18 +22,25 @@ export class CloudinaryService {
     folder: string
   ): Promise<ICloudinaryResponse> {
     return new Promise((resolve, reject) => {
+      const fileExtension = fileName.split(".").pop();
+      const baseName = fileName.replace(/\.[^/.]+$/, "");
+      const uniqueId = crypto.randomUUID();
+      const uniquePublicId = `${baseName}_${uniqueId}${fileExtension ? `.${fileExtension}` : ""}`;
+
       const uploadStream = cloudinary.uploader.upload_stream(
         {
           resource_type: "auto",
           folder: `${process.env.CLOUDINARY_UPLOAD_DIRECTORY}/${folder}`,
-          public_id: fileName.replace(/\.[^/.]+$/, ""),
+          public_id: uniquePublicId,
           filename_override: fileName,
-          use_filename: true,
+          use_filename: false,
           unique_filename: true,
           allowed_formats: ["pdf", "doc", "docx", "xls", "xlsx", "csv", "json", "txt"],
+          timeout: 30000,
         },
         (error, result) => {
           if (error) {
+            console.error("Cloudinary upload error:", error);
             reject(error);
           } else if (result) {
             resolve({
@@ -44,10 +50,14 @@ export class CloudinaryService {
               bytes: result.bytes,
             });
           } else {
-            reject(new Error("Upload failed"));
+            reject(new Error("Upload failed with no error or result"));
           }
         }
       );
+      uploadStream.on("error", (error) => {
+        console.error("Cloudinary stream error:", error);
+        reject(error);
+      });
 
       const bufferStream = require("stream").PassThrough();
       bufferStream.end(buffer);

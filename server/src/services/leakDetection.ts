@@ -117,6 +117,7 @@ export async function detectLeaks(
       data: {
         companyId,
         recordId: anchor.id,
+        uploadId,
         threatId: (t as any).id,
         title: ruleId.replace(/_/g, " "),
         summary: t.description || "",
