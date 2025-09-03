@@ -2,7 +2,7 @@
 
 import * as React from "react";
 
-import { NavMain } from "@/components/nav-main";
+import { NavMain } from "@/components/dashboard/nav-main";
 import logoSmall from "../../public/assets/logo-small.svg";
 import { Sidebar, SidebarContent, SidebarHeader } from "@/components/ui/sidebar";
 import Image from "next/image";

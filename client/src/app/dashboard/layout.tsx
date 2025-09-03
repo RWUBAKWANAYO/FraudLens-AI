@@ -1,5 +1,5 @@
-import { AppSidebar } from "@/components/app-sidebar";
-import { Header } from "@/components/app-header";
+import { AppSidebar } from "@/components/dashboard/app-sidebar";
+import { Header } from "@/components/dashboard/app-header";
 import { SidebarInset, SidebarProvider } from "@/components/ui/sidebar";
 import { getNavigationLinks } from "@/config/sidebar";
 

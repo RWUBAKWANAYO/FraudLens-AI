@@ -3,7 +3,7 @@
 import React from "react";
 import { NavUser } from "./nav-user";
 import { SidebarTrigger } from "@/components/ui/sidebar";
-import { ModeToggle } from "./mode-toggle";
+import { ModeToggle } from "../common/mode-toggle";
 import { NavItem } from "@/config/sidebar";
 import { usePathname } from "next/navigation";
 import { findNavItemByUrl } from "@/lib/utils";
