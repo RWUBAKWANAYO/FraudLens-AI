@@ -17,7 +17,7 @@ export default function Layout({
         <AppSidebar navItems={navItems} />
         <SidebarInset>
           <Header navItems={navItems} />
-          <section>{children}</section>
+          <section className="p-4 sm:p-6">{children}</section>
         </SidebarInset>
       </SidebarProvider>
     </main>

@@ -21,6 +21,7 @@ module.exports = {
           green: "var(--primary-green)",
           red: "var(--primary-red)",
           blue: "var(--primary-blue)",
+          purple: "var(--primary-purple)",
         },
         secondary: {
           DEFAULT: "var(--secondary)",
@@ -29,6 +30,14 @@ module.exports = {
         accent: {
           DEFAULT: "var(--accent)",
           foreground: "var(--accent-foreground)",
+        },
+        tableHover: "var(--tableHover)",
+        modalFooter: "var(--modalFooter)",
+        badge: {
+          redBorder: "var(--badge-redBorder)",
+          redBg: "var(--badge-redBg)",
+          greenBg: "var(--badge-greenBg)",
+          greenBorder: "var(--badge-greenBorder)",
         },
         card: {
           DEFAULT: "var(--card)",

@@ -67,21 +67,21 @@ export function RecentFraud() {
         </Button>
       </div>
       <div className="overflow-hidden rounded-md border border-accent">
-        <Table>
-          <TableHeader>
+        <Table className="min-w-[700px]">
+          <TableHeader className="bg-tableHover">
             <TableRow className="border-accent text-primary">
-              <TableHead className="py-4 text-primary font-semibold">Case ID</TableHead>
-              <TableHead className="py-4 text-primary font-semibold">Type</TableHead>
-              <TableHead className="py-4 text-primary font-semibold">Severity</TableHead>
-              <TableHead className="py-4 text-primary font-semibold">Detected At</TableHead>
-              <TableHead className="py-4 text-primary font-semibold">Source</TableHead>
+              <TableHead className="py-4 text-primary font-bold">Case ID</TableHead>
+              <TableHead className="py-4 text-primary font-bold">Type</TableHead>
+              <TableHead className="py-4 text-primary font-bold">Severity</TableHead>
+              <TableHead className="py-4 text-primary font-bold">Detected At</TableHead>
+              <TableHead className="py-4 text-primary font-bold">Source</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
             {fraudData.map((fraud) => (
               <TableRow
                 key={fraud.id}
-                className="border-b border-accent hover:bg-accent transition-colors"
+                className="border-b border-accent font-normal hover:bg-tableHover transition-colors"
               >
                 <TableCell className="py-4">{fraud.id}</TableCell>
                 <TableCell className="py-4">{fraud.type}</TableCell>

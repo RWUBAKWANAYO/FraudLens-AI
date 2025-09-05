@@ -10,7 +10,6 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { Button } from "@/components/ui/button";
-import { FileText, FileSpreadsheet, FileJson, FileType } from "lucide-react";
 import pdfFile from "@/../public/assets/pdf-file.svg";
 import xlsFile from "@/../public/assets/xls-file.svg";
 import csvFile from "@/../public/assets/csv-file.svg";
@@ -79,62 +78,62 @@ export function RecentFiles() {
         </Button>
       </div>
       <div className="overflow-hidden rounded-md border border-accent">
-        <Table>
-          <TableHeader>
+        <Table className="min-w-[700px]">
+          <TableHeader className="bg-tableHover">
             <TableRow className="border-accent text-primary">
-              <TableHead className="py-4 text-primary font-semibold">File ID</TableHead>
-              <TableHead className="py-4 text-primary font-semibold">Name</TableHead>
-              <TableHead className="py-4 text-primary font-semibold">Type</TableHead>
-              <TableHead className="py-4 text-primary font-semibold">Size</TableHead>
-              <TableHead className="py-4 text-primary font-semibold">Started At</TableHead>
-              <TableHead className="py-4 text-primary font-semibold">Completed At</TableHead>
+              <TableHead className="py-4 text-primary font-bold">File ID</TableHead>
+              <TableHead className="py-4 text-primary font-bold">Name</TableHead>
+              <TableHead className="py-4 text-primary font-bold">Type</TableHead>
+              <TableHead className="py-4 text-primary font-bold">Size</TableHead>
+              <TableHead className="py-4 text-primary font-bold">Started At</TableHead>
+              <TableHead className="py-4 text-primary font-bold">Completed At</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
             {uploadedFiles.map((file) => (
               <TableRow
                 key={file.fileId}
-                className="border-b border-accent hover:bg-accent transition-colors"
+                className="border-b font-normal border-accent hover:bg-tableHover transition-colors"
               >
                 <TableCell className="py-3">{file.fileId}</TableCell>
-                <TableCell className="py-3 flex items-center gap-2">
+                <TableCell className="py-3 flex items-center gap-3">
                   {file.fileType === "pdf" && (
                     <Image
                       src={pdfFile}
                       alt="PDF File"
-                      width={25}
-                      height={25}
-                      className="w-[25px]"
+                      width={22}
+                      height={22}
+                      className="w-[22px]"
                     />
                   )}
                   {file.fileType === "csv" && (
                     <Image
                       src={csvFile}
                       alt="CSV File"
-                      width={25}
-                      height={25}
-                      className="w-[25px]"
+                      width={22}
+                      height={22}
+                      className="w-[22px]"
                     />
                   )}
                   {file.fileType === "xlsx" && (
                     <Image
                       src={xlsFile}
                       alt="XLSX File"
-                      width={25}
-                      height={25}
-                      className="w-[25px]"
+                      width={22}
+                      height={22}
+                      className="w-[22px]"
                     />
                   )}
                   {file.fileType === "json" && (
                     <Image
                       src={jsonFile}
                       alt="JSON File"
-                      width={25}
-                      height={25}
-                      className="w-[20px]"
+                      width={22}
+                      height={22}
+                      className="w-[22px]"
                     />
                   )}
-                  ß{file.fileName}
+                  {file.fileName}
                 </TableCell>
                 <TableCell className="py-3 uppercase">{file.fileType}</TableCell>
                 <TableCell className="py-3">{file.fileSize}</TableCell>

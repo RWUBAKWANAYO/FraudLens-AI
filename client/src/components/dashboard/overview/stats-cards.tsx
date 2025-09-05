@@ -5,6 +5,7 @@ import files from "@/../public/assets/files.svg";
 import frauds from "@/../public/assets/frauds.svg";
 import uploadNew from "@/../public/assets/upload-new.svg";
 import Image from "next/image";
+import Link from "next/link";
 
 const data = {
   totalUsers: 2937,
@@ -77,10 +78,13 @@ export function StatsCards() {
           </div>
         </div>
       </Card>
-      <div className="p-6 border-2 border-dashed border-colored-primary shadow-sm bg-foreground rounded-lg flex flex-col items-center cursor-pointer">
+      <Link
+        href={"/dashboard/upload/create"}
+        className="p-6 border-2 border-dashed border-colored-primary shadow-sm bg-foreground rounded-lg flex flex-col items-center cursor-pointer hover:bg-[#fd882f1a]"
+      >
         <Image src={uploadNew} alt="upload new" width={60} height={60} className="w-[60px]" />
         <h1 className="text-base font-semibold text-primary mt-4">Upload new file to analyze</h1>
-      </div>
+      </Link>
     </div>
   );
 }
