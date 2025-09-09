@@ -74,7 +74,7 @@ export default function UsersListPage() {
   return (
     <div
       className="bg-foreground rounded-lg p-4 sm:p-6 space-y-6"
-      style={{ minHeight: "calc(100vh - 140px)" }}
+      style={{ minHeight: "calc(100vh - 120px)" }}
     >
       <div className="w-full flex flex-col sm:flex-row gap-2 items-start sm:items-center justify-between mb-4">
         <h2 className="text-xl font-bold">User Management</h2>

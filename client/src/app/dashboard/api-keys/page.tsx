@@ -53,7 +53,7 @@ const apiKeysData: ApiKey[] = [
 
 export default function ApiKeysList() {
   return (
-    <div className=" bg-foreground rounded-lg p-6" style={{ minHeight: "calc(100vh - 140px)" }}>
+    <div className=" bg-foreground rounded-lg p-6" style={{ minHeight: "calc(100vh - 120px)" }}>
       <div className="w-full flex flex-col sm:flex-row gap-4 items-start sm:items-center justify-between mb-6">
         <h2 className="text-lg font-bold">API Keys</h2>
         <CreateKey />

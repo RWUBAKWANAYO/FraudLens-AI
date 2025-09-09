@@ -14,6 +14,13 @@ module.exports = {
         colored: {
           primary: "var(--colored-primary)",
           hover: "var(--colored-hover)",
+          shadow: "var(--colored-shadow)",
+        },
+        shadow: {
+          green: "var(--shadow-green)",
+          blue: "var(--shadow-blue)",
+          red: "var(--shadow-red)",
+          purple: "var(--shadow-purple)",
         },
         primary: {
           DEFAULT: "var(--primary)",

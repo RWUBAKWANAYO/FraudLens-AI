@@ -21,7 +21,7 @@ export const Header = ({ navItems }: { navItems: NavItem[] }) => {
   };
 
   return (
-    <div className="flex flex-row items-center justify-between gap-2 px-4 py-0 h-[90px] w-full bg-foreground">
+    <div className="flex flex-row items-center justify-between gap-2 px-4 py-0 h-[70px] w-full bg-foreground">
       <div className="flex items-center gap-x-8">
         <SidebarTrigger className="bg-accent hover:text-primary w-9 h-9" />
         <div className="hidden lg:block">

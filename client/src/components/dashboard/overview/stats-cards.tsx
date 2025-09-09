@@ -1,5 +1,4 @@
 import { Card } from "@/components/ui/card";
-import { Users, UserCheck, Heart, Building2 } from "lucide-react";
 import users from "@/../public/assets/users.svg";
 import files from "@/../public/assets/files.svg";
 import frauds from "@/../public/assets/frauds.svg";
@@ -53,7 +52,7 @@ export function StatsCards() {
               </div>
             </div>
             <p className={`text-sm font-medium`}>
-              <span className={`text-colored-primary mr-2`}>{data.newFiles}</span>
+              <span className={`text-primary-blue mr-2`}>{data.newFiles}</span>
               <span className={`text-primary`}>Uploaded since last month</span>
             </p>
           </div>
@@ -80,7 +79,7 @@ export function StatsCards() {
       </Card>
       <Link
         href={"/dashboard/upload/create"}
-        className="p-6 border-2 border-dashed border-colored-primary shadow-sm bg-foreground rounded-lg flex flex-col items-center cursor-pointer hover:bg-[#fd882f1a]"
+        className="p-6 border-2 border-dashed border-colored-primary shadow-sm bg-foreground rounded-lg flex flex-col items-center cursor-pointer hover:bg-colored-shadow"
       >
         <Image src={uploadNew} alt="upload new" width={60} height={60} className="w-[60px]" />
         <h1 className="text-base font-semibold text-primary mt-4">Upload new file to analyze</h1>

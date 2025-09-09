@@ -74,7 +74,7 @@ export function NavMain({
                     <SidebarMenuButton
                       tooltip={item.title}
                       className={clsx(
-                        "px-4 py-6 mb-1 rounded-lg font-medium",
+                        "px-4 py-5 mb-1 rounded-lg font-medium",
                         isParentActive &&
                           "bg-colored-primary text-white hover:bg-colored-primary hover:text-white"
                       )}
@@ -93,7 +93,7 @@ export function NavMain({
                             <SidebarMenuSubButton
                               asChild
                               className={clsx(
-                                "px-4 py-6 mb-1 rounded-lg font-medium",
+                                "px-4 py-5 mb-1 rounded-lg font-medium",
                                 isSubActive &&
                                   "bg-colored-primary text-white hover:bg-colored-primary hover:text-white "
                               )}
@@ -118,7 +118,7 @@ export function NavMain({
                 tooltip={item.title}
                 asChild
                 className={clsx(
-                  "px-4 py-6 mb-1 rounded-lg font-medium",
+                  "px-4 py-5 mb-1 rounded-lg font-medium",
                   isParentActive &&
                     "bg-colored-primary text-white hover:bg-colored-primary hover:text-white "
                 )}
