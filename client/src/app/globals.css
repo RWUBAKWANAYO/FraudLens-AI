@@ -71,7 +71,7 @@
     --muted: #262626;
     --muted-foreground: #a3a3a3;
     --accent: rgba(255, 255, 255, 0.05);
-    --tableHover: rgba(255, 255, 255, 0.03);
+    --tableHover: rgba(255, 255, 255, 0.031);
     --accent-foreground: rgba(255, 255, 255, 0.1);
     --modalFooter: rgb(38 38 38);
     --destructive: #7f1d1d;
@@ -123,6 +123,59 @@
     100% {
       transform: translateX(100%);
     }
+  }
+
+  /*
+================================================
+Date Range Picker
+================================================
+ */
+  .custom-input {
+    @apply w-full py-2 rounded-md border border-accent-foreground bg-foreground text-sm focus:outline-none focus:ring-0 focus:border-colored-primary disabled:cursor-not-allowed disabled:opacity-50;
+  }
+
+  .custom-calendar {
+    @apply border-0 !rounded-lg !shadow-md !bg-foreground border !border-accent-foreground;
+  }
+
+  .custom-calendar .react-datepicker__header {
+    @apply !bg-transparent !border-0;
+  }
+  .custom-calendar .react-datepicker__day-name{
+    @apply !text-primary-foreground;
+  }
+
+  .custom-calendar .react-datepicker__day {
+    @apply !text-primary;
+  }
+
+  .custom-calendar .react-datepicker__day--keyboard-selected {
+    @apply !bg-accent rounded-md;
+  }
+
+  /* day hover */
+  .custom-calendar .react-datepicker__day:hover {
+    @apply !bg-accent rounded-md;
+  }
+
+  /* selected day */
+  .custom-calendar .react-datepicker__day--selected {
+    @apply rounded-md !bg-colored-primary !text-white;
+  }
+
+  /* today */
+  .custom-calendar .react-datepicker__day--today {
+    @apply bg-accent-foreground rounded-md;
+  }
+
+  .custom-calendar .react-datepicker__current-month {
+    @apply !text-primary;
+  }
+  .custom-popper {
+    @apply !mt-[-5px];
+  }
+  .custom-popper .react-datepicker__triangle {
+    @apply hidden;
   }
 }
 

@@ -52,13 +52,13 @@ export const RealTimeAlerts = () => {
 
   return (
     <div
-      className="grid grid-cols-1 gap-2.5"
+      className="grid grid-cols-1 xl:grid-cols-2 gap-3"
       style={{ maxHeight: "calc(100vh - 220px)", overflowY: "auto" }}
     >
       {alerts.map((alert, i) => (
         <div
           key={i}
-          className="p-4 space-y-2 border border-accent border-s-[6px] border-s-colored-primary bg-tableHover rounded-[4px] shadow-sm"
+          className="p-4 space-y-2 border border-accent-foreground border-s-[6px] border-s-colored-primary  rounded-[4px] shadow"
         >
           <h2 className="text-base font-bold text-primary">{alert.title}</h2>
           <p className="text-sm text-primary-foreground">{alert.description}</p>
