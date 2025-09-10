@@ -11,7 +11,13 @@ import { statsRouter } from "./routes/stats";
 
 const app = express();
 
-app.use(cors());
+app.use(
+  cors({
+    origin: process.env.PUBLIC_WS_ORIGIN,
+    credentials: true,
+  })
+);
+
 app.use(express.json());
 
 setupSwagger(app);

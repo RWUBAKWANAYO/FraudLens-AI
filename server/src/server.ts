@@ -11,7 +11,7 @@ const PORT = process.env.PORT || 8080;
 
 const io = new Server(server, {
   cors: {
-    origin: process.env.PUBLIC_WS_ORIGIN || "*",
+    origin: process.env.PUBLIC_WS_ORIGIN,
     methods: ["GET", "POST"],
     credentials: true,
   },

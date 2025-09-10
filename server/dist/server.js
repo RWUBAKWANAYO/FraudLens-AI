@@ -23,7 +23,7 @@ const server = http_1.default.createServer(app_1.default);
 const PORT = process.env.PORT || 8080;
 const io = new socket_io_1.Server(server, {
     cors: {
-        origin: process.env.PUBLIC_WS_ORIGIN || "*",
+        origin: process.env.PUBLIC_WS_ORIGIN,
         methods: ["GET", "POST"],
         credentials: true,
     },

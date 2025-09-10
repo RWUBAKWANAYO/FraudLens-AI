@@ -13,7 +13,7 @@ import { authenticateTokenOrApiKey, requireRole } from "../middleware/auth";
 const router = Router();
 
 router.post("/register", registerValidation, validateRequest, AuthController.register);
-router.get("/verify-email", AuthController.verifyEmail);
+router.post("/verify-email", AuthController.verifyEmail);
 router.post("/login", loginValidation, validateRequest, AuthController.login);
 router.post(
   "/invite",

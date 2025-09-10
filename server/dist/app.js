@@ -14,7 +14,10 @@ const apiKey_1 = require("./routes/apiKey");
 const swagger_1 = require("./docs/swagger");
 const stats_1 = require("./routes/stats");
 const app = (0, express_1.default)();
-app.use((0, cors_1.default)());
+app.use((0, cors_1.default)({
+    origin: process.env.PUBLIC_WS_ORIGIN,
+    credentials: true,
+}));
 app.use(express_1.default.json());
 (0, swagger_1.setupSwagger)(app);
 app.use("/api/v1/audit", audit_1.auditRouter);

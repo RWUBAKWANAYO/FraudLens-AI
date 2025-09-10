@@ -3,22 +3,22 @@
 import { useEffect } from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
-import { acceptInviteSchema, type AcceptInviteFormData } from "@/lib/schemas/auth";
-import { useAcceptInvite } from "@/hooks/useAuth";
+import { resetPasswordSchema, type ResetPasswordFormData } from "@/lib/schemas/auth";
+import { useResetPassword } from "@/hooks/useAuth";
 import { useSearchParams } from "next/navigation";
 
-const AcceptInvite = () => {
+const ResetPassword = () => {
   const searchParams = useSearchParams();
   const token = searchParams.get("token");
-  const { mutate: acceptInvite, isPending, error } = useAcceptInvite();
+  const { mutate: resetPassword, isPending, error } = useResetPassword();
 
   const {
     register,
     handleSubmit,
     formState: { errors },
     setValue,
-  } = useForm<AcceptInviteFormData>({
-    resolver: zodResolver(acceptInviteSchema),
+  } = useForm<ResetPasswordFormData>({
+    resolver: zodResolver(resetPasswordSchema),
   });
 
   useEffect(() => {
@@ -27,8 +27,8 @@ const AcceptInvite = () => {
     }
   }, [token, setValue]);
 
-  const onSubmit = (data: AcceptInviteFormData) => {
-    acceptInvite(data);
+  const onSubmit = (data: ResetPasswordFormData) => {
+    resetPassword(data);
   };
 
   return (
@@ -42,7 +42,7 @@ const AcceptInvite = () => {
       {!token && (
         <div>
           <label htmlFor="token" className="block text-sm font-medium text-gray-700">
-            Invitation Token
+            Reset Token
           </label>
           <input
             {...register("token")}
@@ -55,7 +55,7 @@ const AcceptInvite = () => {
 
       <div>
         <label htmlFor="password" className="block text-sm font-medium text-gray-700">
-          Password
+          New Password
         </label>
         <input
           {...register("password")}
@@ -70,10 +70,10 @@ const AcceptInvite = () => {
         disabled={isPending}
         className="w-full flex justify-center py-2 px-4 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 disabled:opacity-50"
       >
-        {isPending ? "Accepting..." : "Accept invitation"}
+        {isPending ? "Resetting..." : "Reset password"}
       </button>
     </form>
   );
 };
 
-export default AcceptInvite;
+export default ResetPassword;

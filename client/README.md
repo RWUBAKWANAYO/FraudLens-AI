@@ -1,36 +1,71 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+below is how I'm using @tanstack/react-query to fetch api data. use react-hook-form, zod to create me login, register, verify-email, forgot-password, reset-password, accept-invite based on below post api requests:
 
-## Getting Started
+//=========================================================
+// References of how hooks to call api built
+//=========================================================
 
-First, run the development server:
+"use client";
 
-```bash
-npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
-```
+import { useMutation } from "@tanstack/react-query";
+import { useRouter, useSearchParams } from "next/navigation";
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+export const useLogin = () => {
+  const router = useRouter();
+  const redirectPath = useSearchParams().get("redirect") || "/employees";
+  return useMutation({
+    mutationFn: async (data: { email: string; password: string }) => {
+      const res = await fetch(`${process.env.NEXT_PUBLIC_SERVER_URL}/auth/login`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(data),
+        credentials: "include",
+      });
+      const response = await res.json();
+      if (!res.ok) throw new Error(response.error || "Login failed");
+      return response;
+    },
+    onSuccess: () => router.replace(redirectPath),
+  });
+};
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+//=========================================================
+// postman - register({{BASE_URL}}/auth/register)
+//=========================================================
+1. body:
+{
+  "fullName": "Humble Nayo",
+  "email": "humblenayo@gmail.com",
+  "password": "securepassword123",
+  "companyName": "Nayo Group",
+  "companySlug": "nayo-inc"
+}
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+//=========================================================
+// postman - verify-email({{BASE_URL}}/auth/verify-email?token=8ab2113048e63478ef28e6196e5160d952e1ff985dcd676167193f7ca193cf1d)
+//=========================================================
+1. params:
+token = {{EmailToken}}
 
-## Learn More
+//=========================================================
+// postman - reset-password({{BASE_URL}}/auth/reset-password)
+//=========================================================
+1. body:
+{
+    "token": "72fa11eea20317053f7af8ad692c983d5aaf8590ac8ab9bfaf396f6efba20f98dg",
+    "password": "humblenayo@gmail.com"
+}
 
-To learn more about Next.js, take a look at the following resources:
+//=========================================================
+// postman - current-user for verify if user still authenticated({{BASE_URL}}/auth/me)
+//=========================================================
+1. Authorization:
+Authorization: `Bearer ${token}`
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
-
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
-
-## Deploy on Vercel
-
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
-
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+//=========================================================
+// postman - accept-invite({{BASE_URL}}/auth/accept-invitation)
+//=========================================================
+1. body:
+{
+    "token":"955a1fb22b80fde4fc66565822807b8d403c39a63e52a1a551a76fec5bac8371",
+    "password":"rubymutsinziruby@gmail.com"
+}

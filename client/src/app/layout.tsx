@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
 import "./globals.css";
-import { ThemeProvider } from "@/contexts/ThemeContext";
+import Providers from "./providers";
 
 const geistSans = Geist({
   variable: "--font-geist-sans",
@@ -14,11 +14,10 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "Your App",
-  description: "Your app description",
+  title: "Fraud Detection App",
+  description: "Fraud Detection App ",
 };
 
-// This script runs before React hydration to prevent flash
 const ThemeScript = () => {
   const themeScript = `
     (function() {
@@ -54,7 +53,7 @@ export default function RootLayout({
         <ThemeScript />
       </head>
       <body className={`${geistSans.variable} ${geistMono.variable} antialiased`}>
-        <ThemeProvider>{children}</ThemeProvider>
+        <Providers>{children}</Providers>
       </body>
     </html>
   );
