@@ -5,16 +5,13 @@ import { Modal } from "@mui/material";
 import { useState } from "react";
 import { ThumbsDown, ThumbsUp } from "lucide-react";
 
-export interface IAlert {
+export interface IThreat {
   id: string;
   title: string;
-  summary: string;
-  severity: string;
-  createdAt: string;
-  uploadId?: string;
+  description: string;
 }
 
-export function AlertExplanation({ alert }: { alert: IAlert }) {
+export function ThreatExplanation({ threat }: { threat: IThreat }) {
   const [isModalOpen, setIsModalOpen] = useState(false);
 
   const handleSubmit = () => {
@@ -30,8 +27,8 @@ export function AlertExplanation({ alert }: { alert: IAlert }) {
         sx={{ display: "flex", alignItems: "center", justifyContent: "center" }}
       >
         <div className="p-4 space-y-4 border border-accent-foreground  rounded-lg bg-foreground shadow-sm w-full sm:w-[600px]">
-          <div className="flex items-center justify-between">
-            <h2 className="text-base font-bold text-primary">{alert.title}</h2>
+          <div className="flex items-center justify-between gap-4">
+            <h2 className="text-lg font-bold text-primary">{threat.title}</h2>
             <p className="text-sm font-medium text-primary-foreground">06 June 2023</p>
           </div>
           <p className="text-sm text-primary-foreground">

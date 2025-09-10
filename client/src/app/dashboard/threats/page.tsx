@@ -12,9 +12,9 @@ import {
 import { Search } from "lucide-react";
 import { DateRangePicker } from "@/components/common/date-range";
 import { Pagination } from "@/components/common/pagination";
-import { AlertCard } from "@/components/alerts/alert-card";
+import { ThreatCard } from "@/components/threats/threat-card";
 
-const alerts = [
+const threats = [
   {
     id: "TX1014",
     title: "Duplicate transaction",
@@ -63,7 +63,7 @@ const alerts = [
   },
 ];
 
-export default function UploadHistory() {
+export default function Threats() {
   const [searchQuery, setSearchQuery] = useState("");
   const [fileSort, setFileSort] = useState("allFile");
   const [page, setPage] = useState(1);
@@ -112,8 +112,8 @@ export default function UploadHistory() {
           </div>
         </div>
         <div className="grid grid-cols-1 lg:grid-cols-2  2xl:grid-cols-3 gap-4">
-          {alerts.map((alert, i) => (
-            <AlertCard key={i} alert={alert} />
+          {threats.map((threat, i) => (
+            <ThreatCard key={i} threat={threat} />
           ))}
         </div>
       </div>

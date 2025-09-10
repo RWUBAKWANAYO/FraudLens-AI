@@ -20,7 +20,7 @@ export function FileCard({ item }: { item: FileItem }) {
   return (
     <div className="bg-foreground rounded-lg p-4 shadow border border-accent-foreground">
       <div className="flex items-start justify-end mb-3">
-        <Button className="w-8 h-8 p-0 bg-tableHover text-primary colored-button">
+        <Button className="w-8 h-8 p-0 bg-transparent border border-colored-primary shadow-none  text-colored-primary colored-button">
           <Download className="w-4 h-4 hover:text-primary" />
         </Button>
       </div>

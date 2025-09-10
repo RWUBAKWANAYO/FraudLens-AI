@@ -64,13 +64,6 @@ export const adminLinks: NavItem[] = [
     ],
   },
   {
-    title: "Alerts List",
-    caption: "Alerts of Threats Detected",
-    url: "/dashboard/alerts",
-    iconName: "ShieldAlert",
-    roles: ["admin", "manager", "member"],
-  },
-  {
     title: "Threats List",
     caption: "List of Threats Detected",
     url: "/dashboard/threats",
