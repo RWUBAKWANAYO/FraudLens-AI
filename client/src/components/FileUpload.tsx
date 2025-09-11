@@ -1,6 +1,6 @@
 // components/FileUpload.tsx (updated)
 import { useState } from "react";
-import { useUploads } from "../contexts/UploadContext";
+import { useUploads } from "../context/UploadContext";
 import TransactionForm from "./TransactionForm"; // Import the new form component
 
 interface UploadResponse {

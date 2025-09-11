@@ -37,8 +37,8 @@ export function NavUser({
             <SidebarMenuButton size="lg" className="border-0 outline-none">
               <Avatar className="h-10 w-10 rounded-lg">
                 <AvatarImage src={user.avatar} alt={user.name} />
-                <AvatarFallback className="rounded-lg bg-colored-primary font-bold text-white">
-                  CN
+                <AvatarFallback className="rounded-lg bg-accent border border-accent-foreground font-bold text-primary">
+                  {user.name.charAt(0).toUpperCase()}
                 </AvatarFallback>
               </Avatar>
               {!isMobile && (

@@ -8,20 +8,16 @@ import { NavItem } from "@/config/sidebar";
 import { usePathname } from "next/navigation";
 import { findNavItemByUrl } from "@/lib/utils";
 import moment from "moment";
+import { useRequireAuth } from "@/hooks/useRequireAuth";
+import { HeaderProfileSkeleton } from "../ui/skeletons/common";
 
 export const Header = ({ navItems }: { navItems: NavItem[] }) => {
   const pathname = usePathname();
   const currentNavItem = findNavItemByUrl(navItems, pathname);
-
-  const user = {
-    name: "Rwubakwanayo Olivier",
-    email: "rwubakwanayoolivier@gmail.com",
-    avatar:
-      "https://willieandkim.com/wp-content/uploads/sites/10110/2024/06/LinkedIn-Profile-Photo-Mistakes-Professionals-Should-Avoid.jpg",
-  };
+  const { user, loading } = useRequireAuth();
 
   return (
-    <div className="flex flex-row items-center justify-between gap-2 px-4 py-0 h-[70px] w-full bg-foreground">
+    <div className="flex flex-row items-center justify-between gap-2 px-4 sm:px-6 py-0 h-[70px] w-full bg-foreground">
       <div className="flex items-center gap-x-8">
         <SidebarTrigger className="bg-accent hover:text-primary w-9 h-9" />
         <div className="hidden lg:block">
@@ -31,7 +27,16 @@ export const Header = ({ navItems }: { navItems: NavItem[] }) => {
       </div>
       <div className="flex items-center gap-8">
         <ModeToggle />
-        <NavUser user={user} />
+        {loading && <HeaderProfileSkeleton />}
+        {!loading && user && (
+          <NavUser
+            user={{
+              name: user.fullName,
+              email: user.email,
+              avatar: user.avatar || "",
+            }}
+          />
+        )}
       </div>
     </div>
   );

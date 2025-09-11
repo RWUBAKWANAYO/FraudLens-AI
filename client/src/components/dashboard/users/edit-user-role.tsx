@@ -16,7 +16,8 @@ import {
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { editUserRoleSchema, type EditUserRoleFormData } from "@/lib/zod-schemas/users";
-import { useEditUserRole, User } from "@/hooks/useUsers";
+import { useEditUserRole } from "@/hooks/useUsers";
+import { ErrorCard } from "@/components/common/status-message";
 
 type EditUserRoleProps = {
   userId: string;
@@ -29,7 +30,6 @@ export function EditUserRole({ userId, userName, currentRole }: EditUserRoleProp
   const { mutate: editUserRole, isPending, error } = useEditUserRole();
 
   const {
-    register,
     handleSubmit,
     setValue,
     watch,
@@ -37,7 +37,7 @@ export function EditUserRole({ userId, userName, currentRole }: EditUserRoleProp
   } = useForm<EditUserRoleFormData>({
     resolver: zodResolver(editUserRoleSchema),
     defaultValues: {
-      role: currentRole as User["role"],
+      role: currentRole as EditUserRoleFormData["role"],
     },
   });
 
@@ -68,11 +68,7 @@ export function EditUserRole({ userId, userName, currentRole }: EditUserRoleProp
             <CardDescription>Update role for {userName}</CardDescription>
           </CardHeader>
           <CardContent>
-            {error && (
-              <div className="bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded mb-4">
-                {error.message}
-              </div>
-            )}
+            {error && <ErrorCard error={error} classNames="mb-4" />}
 
             <form onSubmit={handleSubmit(onSubmit)} className="flex flex-col gap-6 relative">
               <div className="grid gap-3">

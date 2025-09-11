@@ -1,6 +1,9 @@
 import { useMutation } from "@tanstack/react-query";
 import { useRouter, useSearchParams } from "next/navigation";
+import { api } from "@/lib/api";
+import { useAuthContext } from "@/context/AuthContext";
 
+// REGISTER
 export const useRegister = () => {
   return useMutation({
     mutationFn: async (data: {
@@ -10,104 +13,74 @@ export const useRegister = () => {
       companyName: string;
       companySlug: string;
     }) => {
-      const res = await fetch(`${process.env.NEXT_PUBLIC_SERVER_URL}/auth/register`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(data),
-      });
-      const response = await res.json();
-      if (!res.ok) throw new Error(response.error || "Registration failed");
-      return response;
+      const res = await api.post("/auth/register", data);
+      return res.data;
     },
   });
 };
 
+// VERIFY EMAIL
 export const useVerifyEmail = () => {
   const router = useRouter();
-
   return useMutation({
     mutationFn: async (token: string) => {
-      const res = await fetch(
-        `${process.env.NEXT_PUBLIC_SERVER_URL}/auth/verify-email?token=${token}`,
-        {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-        }
-      );
-      const response = await res.json();
-      if (!res.ok) throw new Error(response.error || "Email verification failed");
-      return response;
+      const res = await api.post(`/auth/verify-email?token=${token}`);
+      return res.data;
     },
     onSuccess: () => router.push("/login"),
   });
 };
 
+// LOGIN
 export const useLogin = () => {
   const router = useRouter();
-  const redirectPath = useSearchParams().get("redirect") || "/dashboard";
+  const redirect = useSearchParams().get("redirect") || "/dashboard";
+  const { login } = useAuthContext();
 
   return useMutation({
-    mutationFn: async (data: { email: string; password: string }) => {
-      const res = await fetch(`${process.env.NEXT_PUBLIC_SERVER_URL}/auth/login`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(data),
-        credentials: "include",
-      });
-      const response = await res.json();
-      if (!res.ok) throw new Error(response.error || "Login failed");
-      return response;
-    },
-    onSuccess: () => router.replace(redirectPath),
+    mutationFn: (data: { email: string; password: string }) => login(data.email, data.password),
+    onSuccess: () => router.replace(redirect),
+    retry: false,
   });
 };
 
+// LOGOUT
+export const useLogout = () => {
+  const { logout } = useAuthContext();
+  return useMutation({
+    mutationFn: logout,
+  });
+};
+
+// FORGOT PASSWORD
 export const useForgotPassword = () => {
   return useMutation({
     mutationFn: async (email: string) => {
-      const res = await fetch(`${process.env.NEXT_PUBLIC_SERVER_URL}/auth/forgot-password`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ email }),
-      });
-      const response = await res.json();
-      if (!res.ok) throw new Error(response.error || "Password reset request failed");
-      return response;
+      const res = await api.post("/auth/forgot-password", { email });
+      return res.data;
     },
   });
 };
 
+// RESET PASSWORD
 export const useResetPassword = () => {
   const router = useRouter();
-
   return useMutation({
     mutationFn: async (data: { token: string; password: string }) => {
-      const res = await fetch(`${process.env.NEXT_PUBLIC_SERVER_URL}/auth/reset-password`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(data),
-      });
-      const response = await res.json();
-      if (!res.ok) throw new Error(response.error || "Password reset failed");
-      return response;
+      const res = await api.post("/auth/reset-password", data);
+      return res.data;
     },
     onSuccess: () => router.push("/login?reset=true"),
   });
 };
 
+// ACCEPT INVITE
 export const useAcceptInvite = () => {
   const router = useRouter();
-
   return useMutation({
     mutationFn: async (data: { token: string; password: string }) => {
-      const res = await fetch(`${process.env.NEXT_PUBLIC_SERVER_URL}/auth/accept-invitation`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(data),
-      });
-      const response = await res.json();
-      if (!res.ok) throw new Error(response.error || "Invitation acceptance failed");
-      return response;
+      const res = await api.post("/auth/accept-invitation", data);
+      return res.data;
     },
     onSuccess: () => router.push("/login"),
   });

@@ -6,7 +6,7 @@ import RealTimeAlerts from "../components/RealTimeAlerts";
 import ThreatDashboard from "../components/ThreatDashboard";
 import SimilaritySearch from "../components/SimilaritySearch";
 import RuleManager from "../components/RuleManager";
-import { UploadProvider } from "../contexts/UploadContext";
+import { UploadProvider } from "../context/UploadContext";
 import io, { Socket } from "socket.io-client";
 import UploadsList from "@/components/UploadsList";
 

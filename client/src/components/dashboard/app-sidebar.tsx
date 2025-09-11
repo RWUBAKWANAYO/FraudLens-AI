@@ -13,7 +13,6 @@ interface AppSidebarProps extends React.ComponentProps<typeof Sidebar> {
 }
 
 export function AppSidebar({ navItems, ...props }: AppSidebarProps) {
-  console.log(navItems);
   return (
     <Sidebar collapsible="icon" {...props} className="border-none">
       <SidebarHeader className="flex flex-row justify-start items-center py-6">

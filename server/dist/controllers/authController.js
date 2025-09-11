@@ -142,7 +142,20 @@ class AuthController {
                         companyId: user.companyId,
                         role: user.role,
                     });
-                    res.json({ accessToken });
+                    res.json({
+                        accessToken,
+                        user: {
+                            id: user.id,
+                            email: user.email,
+                            fullName: user.fullName,
+                            role: user.role,
+                            company: {
+                                id: user.company.id,
+                                name: user.company.name,
+                                slug: user.company.slug,
+                            },
+                        },
+                    });
                 }
                 catch (error) {
                     if (error.name === "TokenExpiredError") {

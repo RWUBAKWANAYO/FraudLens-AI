@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { useUploads } from "../contexts/UploadContext";
+import { useUploads } from "../context/UploadContext";
 
 interface TransactionFormProps {
   companyId: string;

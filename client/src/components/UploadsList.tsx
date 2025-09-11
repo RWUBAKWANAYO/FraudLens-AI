@@ -2,7 +2,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { useUploads } from "../contexts/UploadContext";
+import { useUploads } from "../context/UploadContext";
 
 interface Upload {
   id: string;

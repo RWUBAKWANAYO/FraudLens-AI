@@ -7,28 +7,14 @@ import { EditUserRole } from "@/components/dashboard/users/edit-user-role";
 import { RemoveUser } from "@/components/dashboard/users/remove-user";
 import { InviteUser } from "@/components/dashboard/users/invite-user";
 import { useUsers } from "@/hooks/useUsers";
-import { Loader2 } from "lucide-react";
 import moment from "moment";
+import { StatusMessage } from "@/components/common/status-message";
 
 export default function UsersListPage() {
   const { data: users, isLoading, error } = useUsers();
 
-  if (isLoading) {
-    return (
-      <div className="flex items-center justify-center min-h-[calc(100vh-120px)]">
-        <Loader2 className="h-8 w-8 animate-spin" />
-      </div>
-    );
-  }
-
-  if (error) {
-    return (
-      <div className="flex items-center justify-center min-h-[calc(100vh-120px)]">
-        <div className="bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded">
-          {error.message}
-        </div>
-      </div>
-    );
+  if (isLoading || error) {
+    return <StatusMessage isLoading={isLoading} error={error} height="calc(100vh - 120px)" />;
   }
 
   return (
