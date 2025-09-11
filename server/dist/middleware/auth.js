@@ -45,7 +45,7 @@ const authenticateTokenOrApiKey = (req, res, next) => __awaiter(void 0, void 0, 
 exports.authenticateTokenOrApiKey = authenticateTokenOrApiKey;
 const handleJwtAuth = (req, res, next, token) => __awaiter(void 0, void 0, void 0, function* () {
     try {
-        const payload = auth_1.AuthUtils.verifyToken(token);
+        const payload = auth_1.AuthUtils.verifyAccessToken(token);
         const user = yield db_1.prisma.user.findUnique({
             where: { id: payload.userId },
             select: {
@@ -73,7 +73,10 @@ const handleJwtAuth = (req, res, next, token) => __awaiter(void 0, void 0, void 
     }
     catch (error) {
         if (error.name === "TokenExpiredError") {
-            return res.status(401).json({ error: "Token expired" });
+            return res.status(401).json({
+                error: "Token expired",
+                code: "TOKEN_EXPIRED",
+            });
         }
         if (error.name === "JsonWebTokenError") {
             return res.status(401).json({ error: "Invalid token" });

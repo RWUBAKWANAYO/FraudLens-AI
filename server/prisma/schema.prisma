@@ -35,9 +35,10 @@ model User {
   companyId         String
   role              UserRole     @default(MEMBER)
   isVerified        Boolean      @default(false)
-  verificationToken String?
-  resetToken        String?
+  verificationToken String?      @db.VarChar(512)
+  resetToken        String?      @db.VarChar(512)
   resetTokenExpiry  DateTime?
+  refreshToken      String?      @db.VarChar(512)
   lastLogin         DateTime?
   createdAt         DateTime     @default(now())
   updatedAt         DateTime     @updatedAt
@@ -51,6 +52,7 @@ model User {
   @@index([companyId, email])
   @@index([verificationToken])
   @@index([resetToken])
+  @@index([refreshToken])
   @@index([invitedById])
 }
 

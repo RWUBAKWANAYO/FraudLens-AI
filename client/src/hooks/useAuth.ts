@@ -109,6 +109,6 @@ export const useAcceptInvite = () => {
       if (!res.ok) throw new Error(response.error || "Invitation acceptance failed");
       return response;
     },
-    onSuccess: () => router.push("/login?inviteAccepted=true"),
+    onSuccess: () => router.push("/login"),
   });
 };

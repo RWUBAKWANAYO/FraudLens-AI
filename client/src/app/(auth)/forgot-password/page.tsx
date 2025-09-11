@@ -2,7 +2,7 @@
 
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
-import { forgotPasswordSchema, type ForgotPasswordFormData } from "@/lib/schemas/auth";
+import { forgotPasswordSchema, type ForgotPasswordFormData } from "@/lib/zod-schemas/auth";
 import { useForgotPassword } from "@/hooks/useAuth";
 
 const ForgotPassword = () => {

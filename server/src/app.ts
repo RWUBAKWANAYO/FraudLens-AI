@@ -1,6 +1,7 @@
 import express from "express";
 import "dotenv/config";
 import cors from "cors";
+import cookieParser from "cookie-parser";
 import { auditRouter } from "./routes/audit";
 import { authRouter } from "./routes/auth";
 import { usersRouter } from "./routes/users";
@@ -19,6 +20,8 @@ app.use(
 );
 
 app.use(express.json());
+
+app.use(cookieParser());
 
 setupSwagger(app);
 

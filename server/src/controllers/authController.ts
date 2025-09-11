@@ -58,22 +58,39 @@ export class AuthController {
       if (!isValidPassword) {
         return res.status(401).json({ error: "Invalid credentials" });
       }
-
-      // Update last login
       await prisma.user.update({
         where: { id: user.id },
         data: { lastLogin: new Date() },
       });
 
-      const token = AuthUtils.generateToken({
+      const accessToken = AuthUtils.generateAccessToken({
         userId: user.id,
         email: user.email,
         companyId: user.companyId,
         role: user.role,
       });
 
+      const refreshToken = AuthUtils.generateRefreshToken({
+        userId: user.id,
+        email: user.email,
+      });
+
+      await prisma.user.update({
+        where: { id: user.id },
+        data: { refreshToken, lastLogin: new Date() },
+      });
+
+      const isProduction = process.env.NODE_ENV === "production";
+
+      res.cookie("jwt", refreshToken, {
+        httpOnly: true,
+        secure: isProduction,
+        sameSite: isProduction ? "none" : "lax",
+        maxAge: 7 * 24 * 60 * 60 * 1000,
+      });
+
       res.json({
-        token,
+        accessToken,
         user: {
           id: user.id,
           email: user.email,
@@ -91,13 +108,104 @@ export class AuthController {
     }
   }
 
+  static async refreshToken(req: Request, res: Response) {
+    try {
+      const cookies = req.cookies;
+      if (!cookies?.jwt) {
+        return res.status(401).json({ error: "Refresh token required" });
+      }
+
+      const refreshToken = cookies.jwt;
+
+      const user = await prisma.user.findFirst({
+        where: { refreshToken },
+        include: { company: true },
+      });
+
+      if (!user) {
+        res.clearCookie("jwt");
+        return res.status(403).json({ error: "Invalid refresh token" });
+      }
+
+      try {
+        const decoded = AuthUtils.verifyRefreshToken(refreshToken);
+
+        if (user.id !== decoded.userId) {
+          await prisma.user.update({
+            where: { id: user.id },
+            data: { refreshToken: null },
+          });
+
+          res.clearCookie("jwt");
+
+          return res.status(403).json({ error: "Token mismatch" });
+        }
+
+        const accessToken = AuthUtils.generateAccessToken({
+          userId: user.id,
+          email: user.email,
+          companyId: user.companyId,
+          role: user.role,
+        });
+        res.json({ accessToken });
+      } catch (error: any) {
+        if (error.name === "TokenExpiredError") {
+          await prisma.user.update({
+            where: { id: user.id },
+            data: { refreshToken: null },
+          });
+
+          res.clearCookie("jwt");
+          return res.status(403).json({ error: "Refresh token expired" });
+        }
+
+        await prisma.user.update({
+          where: { id: user.id },
+          data: { refreshToken: null },
+        });
+
+        res.clearCookie("jwt");
+        return res.status(403).json({ error: "Invalid refresh token" });
+      }
+    } catch (error: any) {
+      console.error("Refresh token error:", error);
+      res.status(500).json({ error: "Internal server error" });
+    }
+  }
+
+  static async logout(req: Request, res: Response) {
+    try {
+      const cookies = req.cookies;
+      if (!cookies?.jwt) {
+        res.clearCookie("jwt");
+        return res.sendStatus(204);
+      }
+      const refreshToken = cookies.jwt;
+      const user = await prisma.user.findFirst({
+        where: { refreshToken },
+      });
+
+      if (user) {
+        await prisma.user.update({
+          where: { id: user.id },
+          data: { refreshToken: null },
+        });
+      }
+
+      res.clearCookie("jwt");
+
+      res.sendStatus(204);
+    } catch (error: any) {
+      console.error("Logout error:", error);
+      res.status(500).json({ error: "Internal server error" });
+    }
+  }
+
   static async inviteUser(req: Request, res: Response) {
     try {
       const { email, role } = req.body;
       const inviterId = req.user!.id;
-
       const invitation = await AuthService.inviteUser(inviterId, { email, role });
-
       res.status(201).json({
         message: "Invitation sent successfully",
         invitationId: invitation.id,
@@ -110,9 +218,7 @@ export class AuthController {
   static async acceptInvitation(req: Request, res: Response) {
     try {
       const { token, password } = req.body;
-
       const user = await AuthService.acceptInvitation(token, password);
-
       res.json({
         message: "Invitation accepted successfully",
         userId: user.id,
@@ -125,9 +231,7 @@ export class AuthController {
   static async forgotPassword(req: Request, res: Response) {
     try {
       const { email } = req.body;
-
       const result = await AuthService.forgotPassword({ email });
-
       res.json(result);
     } catch (error: any) {
       res.status(400).json({ error: error.message });
@@ -137,9 +241,7 @@ export class AuthController {
   static async resetPassword(req: Request, res: Response) {
     try {
       const { token, password } = req.body;
-
       const result = await AuthService.resetPassword({ token, password });
-
       res.json(result);
     } catch (error: any) {
       res.status(400).json({ error: error.message });

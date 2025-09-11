@@ -5,19 +5,23 @@ import React from "react";
 import { Modal } from "@mui/material";
 import { Button } from "@/components/ui/button";
 import { Trash2 } from "lucide-react";
+import { useRemoveUser } from "@/hooks/useUsers";
 
 type RemoveUserProps = {
   userId: string;
   userName: string;
-  onUserRemove: (userId: string) => void;
 };
 
-export const RemoveUser = ({ userId, userName, onUserRemove }: RemoveUserProps) => {
+export const RemoveUser = ({ userId, userName }: RemoveUserProps) => {
   const [isDeleteModalOpen, setIsDeleteModalOpen] = React.useState(false);
+  const { mutate: removeUser, isPending, error } = useRemoveUser();
 
   const deleteHandler = () => {
-    onUserRemove(userId);
-    setIsDeleteModalOpen(false);
+    removeUser(userId, {
+      onSuccess: () => {
+        setIsDeleteModalOpen(false);
+      },
+    });
   };
 
   return (
@@ -31,10 +35,12 @@ export const RemoveUser = ({ userId, userName, onUserRemove }: RemoveUserProps) 
         <ModalMessageCard
           title="Remove User"
           message={`Are you sure you want to remove ${userName}? This action cannot be undone.`}
-          actionButtonName="Remove User"
+          actionButtonName={isPending ? "Removing..." : "Remove User"}
           actionButtonStyle={"bg-red-500 text-white"}
           cancelButtonHandler={() => setIsDeleteModalOpen(false)}
           actionButtonHandler={deleteHandler}
+          disabled={isPending}
+          error={error?.message}
         />
       </Modal>
       <Button

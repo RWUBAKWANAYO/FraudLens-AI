@@ -3,7 +3,7 @@
 import { useEffect } from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
-import { acceptInviteSchema, type AcceptInviteFormData } from "@/lib/schemas/auth";
+import { acceptInviteSchema, type AcceptInviteFormData } from "@/lib/zod-schemas/auth";
 import { useAcceptInvite } from "@/hooks/useAuth";
 import { useSearchParams } from "next/navigation";
 

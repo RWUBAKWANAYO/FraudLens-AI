@@ -15,6 +15,8 @@ export interface IMessageCard {
   actionButtonName?: string;
   cancelButtonStyle?: string;
   actionButtonStyle?: string;
+  disabled?: boolean;
+  error?: string;
 }
 
 export const ModalMessageCard: React.FC<IMessageCard> = ({
@@ -29,6 +31,8 @@ export const ModalMessageCard: React.FC<IMessageCard> = ({
   actionButtonStyle,
   cancelButtonName,
   actionButtonName,
+  disabled = false,
+  error,
 }) => {
   return (
     <div
@@ -48,26 +52,33 @@ export const ModalMessageCard: React.FC<IMessageCard> = ({
             <div className="mt-2">
               <p className={`text-sm font-medium leading-5 text-primary-foreground`}>{message}</p>
             </div>
+            {error && (
+              <div className="mt-3 bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded mb-4">
+                {error}
+              </div>
+            )}
           </div>
         </div>
       </div>
       <div className={`px-4 py-3 sm:flex sm:flex-row-reverse sm:px-6 bg-modalFooter`}>
         <button
           type="button"
-          className={`inline-flex w-full justify-center rounded-md  px-3 py-2 text-sm font-semibold shadow-sm sm:ml-3 sm:w-auto ${
+          className={`inline-flex w-full justify-center rounded-md  px-3 py-2 text-sm font-semibold shadow-sm sm:ml-3 sm:w-auto disabled:cursor-not-allowed disabled:opacity-50 ${
             actionButtonStyle ? actionButtonStyle : "bg-red-500 text-white"
           }`}
           onClick={() => actionButtonHandler()}
+          disabled={disabled}
         >
           {actionButtonName ? actionButtonName : "Delete"}
         </button>
         <button
           type="button"
-          className={`mt-3 inline-flex w-full justify-center rounded-md px-3 py-2 text-sm border font-semibold shadow-sm sm:mt-0 sm:w-auto ${
+          className={`mt-3 inline-flex w-full justify-center rounded-md px-3 py-2 text-sm border font-semibold shadow-sm sm:mt-0 sm:w-auto disabled:cursor-not-allowed disabled:opacity-50 ${
             cancelButtonStyle ? cancelButtonStyle : "border-accent-foreground text-primary"
           }`}
           onClick={() => cancelButtonHandler()}
           data-autofocus
+          disabled={disabled}
         >
           {cancelButtonName ? cancelButtonName : "Cancel"}
         </button>

@@ -3,7 +3,7 @@
 import { useEffect } from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
-import { resetPasswordSchema, type ResetPasswordFormData } from "@/lib/schemas/auth";
+import { resetPasswordSchema, type ResetPasswordFormData } from "@/lib/zod-schemas/auth";
 import { useResetPassword } from "@/hooks/useAuth";
 import { useSearchParams } from "next/navigation";
 

@@ -13,22 +13,45 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { useForm } from "react-hook-form";
+import { zodResolver } from "@hookform/resolvers/zod";
+import { editUserRoleSchema, type EditUserRoleFormData } from "@/lib/zod-schemas/users";
+import { useEditUserRole, User } from "@/hooks/useUsers";
 
 type EditUserRoleProps = {
   userId: string;
   userName: string;
   currentRole: string;
-  onRoleUpdate: (userId: string, newRole: string) => void;
 };
 
-export function EditUserRole({ userId, userName, currentRole, onRoleUpdate }: EditUserRoleProps) {
+export function EditUserRole({ userId, userName, currentRole }: EditUserRoleProps) {
   const [isModalOpen, setIsModalOpen] = useState(false);
-  const [selectedRole, setSelectedRole] = useState(currentRole);
+  const { mutate: editUserRole, isPending, error } = useEditUserRole();
 
-  const handleSubmit = (e: React.FormEvent) => {
-    e.preventDefault();
-    onRoleUpdate(userId, selectedRole);
-    setIsModalOpen(false);
+  const {
+    register,
+    handleSubmit,
+    setValue,
+    watch,
+    formState: { errors },
+  } = useForm<EditUserRoleFormData>({
+    resolver: zodResolver(editUserRoleSchema),
+    defaultValues: {
+      role: currentRole as User["role"],
+    },
+  });
+
+  const selectedRole = watch("role");
+
+  const onSubmit = (data: EditUserRoleFormData) => {
+    editUserRole(
+      { userId, role: data.role },
+      {
+        onSuccess: () => {
+          setIsModalOpen(false);
+        },
+      }
+    );
   };
 
   return (
@@ -45,23 +68,41 @@ export function EditUserRole({ userId, userName, currentRole, onRoleUpdate }: Ed
             <CardDescription>Update role for {userName}</CardDescription>
           </CardHeader>
           <CardContent>
-            <form onSubmit={handleSubmit} className="flex flex-col gap-6 relative">
+            {error && (
+              <div className="bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded mb-4">
+                {error.message}
+              </div>
+            )}
+
+            <form onSubmit={handleSubmit(onSubmit)} className="flex flex-col gap-6 relative">
               <div className="grid gap-3">
                 <Label htmlFor="role">Select Role</Label>
-                <Select value={selectedRole} onValueChange={setSelectedRole}>
+                <Select
+                  value={selectedRole}
+                  onValueChange={(value) =>
+                    setValue("role", value as EditUserRoleFormData["role"], {
+                      shouldValidate: true,
+                    })
+                  }
+                >
                   <SelectTrigger className="border-accent-foreground focus:border-colored-primary focus:ring-colored-primary">
                     <SelectValue placeholder="Select a role" />
                   </SelectTrigger>
                   <SelectContent className="z-[9999] bg-foreground border-accent-foreground">
-                    <SelectItem value="admin">Admin</SelectItem>
-                    <SelectItem value="manager">Manager</SelectItem>
-                    <SelectItem value="member">Member</SelectItem>
+                    <SelectItem value="ADMIN">Admin</SelectItem>
+                    <SelectItem value="MANAGER">Manager</SelectItem>
+                    <SelectItem value="MEMBER">Member</SelectItem>
                   </SelectContent>
                 </Select>
+                {errors.role && <p className="text-sm text-red-600">{errors.role.message}</p>}
               </div>
-              <Button type="submit" className="w-full bg-colored-primary text-white colored-button">
+              <Button
+                type="submit"
+                disabled={isPending}
+                className="w-full bg-colored-primary text-white colored-button"
+              >
                 <Edit className="h-4 w-4 mr-2" />
-                Update Role
+                {isPending ? "Updating..." : "Update Role"}
               </Button>
             </form>
           </CardContent>

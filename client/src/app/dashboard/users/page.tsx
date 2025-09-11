@@ -2,74 +2,34 @@
 
 import * as React from "react";
 import { Card, CardContent, CardDescription, CardTitle } from "@/components/ui/card";
-import { User } from "lucide-react";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { EditUserRole } from "@/components/dashboard/users/edit-user-role";
 import { RemoveUser } from "@/components/dashboard/users/remove-user";
 import { InviteUser } from "@/components/dashboard/users/invite-user";
-
-type User = {
-  id: string;
-  name: string;
-  email: string;
-  role: "admin" | "manager" | "member";
-  avatar?: string;
-  joinedAt: string;
-  lastActive: string;
-  status: "active" | "inactive" | "suspended";
-};
-
-const usersData: User[] = [
-  {
-    id: "USR-1001",
-    name: "Sarah Johnson",
-    email: "sarah.johnson@example.com",
-    role: "admin",
-    joinedAt: "2024-01-15",
-    lastActive: "2025-09-05 14:30",
-    status: "active",
-    avatar:
-      "https://willieandkim.com/wp-content/uploads/sites/10110/2024/06/LinkedIn-Profile-Photo-Mistakes-Professionals-Should-Avoid.jpg",
-  },
-  {
-    id: "USR-1002",
-    name: "Michael Chen",
-    email: "michael.chen@company.com",
-    role: "manager",
-    joinedAt: "2024-02-20",
-    lastActive: "2025-09-05 10:15",
-    status: "active",
-    avatar:
-      "https://willieandkim.com/wp-content/uploads/sites/10110/2024/06/LinkedIn-Profile-Photo-Mistakes-Professionals-Should-Avoid.jpg",
-  },
-  {
-    id: "USR-1003",
-    name: "Emily Rodriguez",
-    email: "emily.rodriguez@example.org",
-    role: "member",
-    joinedAt: "2024-03-10",
-    lastActive: "2025-09-04 16:45",
-    status: "active",
-    avatar:
-      "https://willieandkim.com/wp-content/uploads/sites/10110/2024/06/LinkedIn-Profile-Photo-Mistakes-Professionals-Should-Avoid.jpg",
-  },
-];
+import { useUsers } from "@/hooks/useUsers";
+import { Loader2 } from "lucide-react";
+import moment from "moment";
 
 export default function UsersListPage() {
-  const handleRoleUpdate = (userId: string, newRole: string) => {
-    console.log("Updating role for user:", userId, "to:", newRole);
-    // Implement role update logic here
-  };
+  const { data: users, isLoading, error } = useUsers();
 
-  const handleUserRemove = (userId: string) => {
-    console.log("Removing user:", userId);
-    // Implement user removal logic here
-  };
+  if (isLoading) {
+    return (
+      <div className="flex items-center justify-center min-h-[calc(100vh-120px)]">
+        <Loader2 className="h-8 w-8 animate-spin" />
+      </div>
+    );
+  }
 
-  const handleUserInvite = (email: string, role: string) => {
-    console.log("Inviting user:", email, "with role:", role);
-    // Implement user invitation logic here
-  };
+  if (error) {
+    return (
+      <div className="flex items-center justify-center min-h-[calc(100vh-120px)]">
+        <div className="bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded">
+          {error.message}
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div
@@ -78,11 +38,11 @@ export default function UsersListPage() {
     >
       <div className="w-full flex flex-col sm:flex-row gap-2 items-start sm:items-center justify-between mb-4">
         <h2 className="text-xl font-bold">User Management</h2>
-        <InviteUser onUserInvite={handleUserInvite} />
+        <InviteUser />
       </div>
 
       <div className="grid grid-cols-1 xl:grid-cols-2 2xl:grid-cols-3 gap-4">
-        {usersData.map((user) => (
+        {users?.map((user) => (
           <Card
             key={user.id}
             className="border border-accent-foreground shadow-sm bg-foreground overflow-hidden"
@@ -92,44 +52,37 @@ export default function UsersListPage() {
                 <Avatar className="h-[175px] w-full sm:w-[175px] rounded-lg">
                   <AvatarImage
                     src={user.avatar}
-                    alt={user.name}
+                    alt={user.fullName}
                     className="w-full h-full object-cover"
                   />
                   <AvatarFallback className="rounded-lg text-primary font-bold bg-accent">
-                    {user.name.charAt(0).toUpperCase()}
+                    {user.fullName.charAt(0).toUpperCase()}
                   </AvatarFallback>
                 </Avatar>
                 <div className="pl-4 sm:pl-0 py-4 pr-4 flex-1">
                   <div className="space-y-1">
-                    <CardTitle className="text-base font-bold">{user.name}</CardTitle>
+                    <CardTitle className="text-base font-bold">{user.fullName}</CardTitle>
                     <CardDescription>{user.email}</CardDescription>
                     <h2
                       className={`text-sm font-bold ${
-                        user.role === "admin"
+                        user.role === "ADMIN"
                           ? "text-primary-blue"
-                          : user.role === "manager"
+                          : user.role === "MANAGER"
                           ? "text-primary-green"
                           : "text-primary-purple"
                       }`}
                     >
                       {user.role}
                     </h2>
-                    <p className="text-sm">
-                      Joined: {new Date(user.joinedAt).toLocaleDateString()}
-                    </p>
+                    <p className="text-sm">Joined: {moment(user.createdAt).format("YYYY-MM-DD")}</p>
                   </div>
                   <div className="pt-3 grid grid-cols-2 gap-2">
                     <EditUserRole
                       userId={user.id}
-                      userName={user.name}
+                      userName={user.fullName}
                       currentRole={user.role}
-                      onRoleUpdate={handleRoleUpdate}
                     />
-                    <RemoveUser
-                      userId={user.id}
-                      userName={user.name}
-                      onUserRemove={handleUserRemove}
-                    />
+                    <RemoveUser userId={user.id} userName={user.fullName} />
                   </div>
                 </div>
               </div>

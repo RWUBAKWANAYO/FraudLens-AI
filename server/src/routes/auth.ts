@@ -15,6 +15,8 @@ const router = Router();
 router.post("/register", registerValidation, validateRequest, AuthController.register);
 router.post("/verify-email", AuthController.verifyEmail);
 router.post("/login", loginValidation, validateRequest, AuthController.login);
+router.post("/refresh-token", AuthController.refreshToken);
+router.post("/logout", authenticateTokenOrApiKey, AuthController.logout);
 router.post(
   "/invite",
   authenticateTokenOrApiKey,

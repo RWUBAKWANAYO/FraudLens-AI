@@ -13,7 +13,6 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
 };
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.AuthUtils = void 0;
-// server/src/utils/auth.ts
 const bcrypt_1 = __importDefault(require("bcrypt"));
 const jsonwebtoken_1 = __importDefault(require("jsonwebtoken"));
 class AuthUtils {
@@ -28,20 +27,37 @@ class AuthUtils {
             return bcrypt_1.default.compare(password, hash);
         });
     }
-    static generateToken(payload) {
-        const secret = process.env.JWT_SECRET;
+    static generateAccessToken(payload) {
+        const secret = process.env.JWT_ACCESS_SECRET;
         if (!secret) {
-            throw new Error("JWT_SECRET is not defined");
+            throw new Error("JWT_ACCESS_SECRET is not defined");
         }
         const options = {
-            expiresIn: (process.env.JWT_EXPIRES_IN || "30d"),
+            expiresIn: (process.env.JWT_ACCESS_EXPIRES_IN || "15m"),
         };
         return jsonwebtoken_1.default.sign(payload, secret, options);
     }
-    static verifyToken(token) {
-        const secret = process.env.JWT_SECRET;
+    static generateRefreshToken(payload) {
+        const secret = process.env.JWT_REFRESH_SECRET;
         if (!secret) {
-            throw new Error("JWT_SECRET is not defined");
+            throw new Error("JWT_REFRESH_SECRET is not defined");
+        }
+        const options = {
+            expiresIn: (process.env.JWT_REFRESH_EXPIRES_IN || "7d"),
+        };
+        return jsonwebtoken_1.default.sign(payload, secret, options);
+    }
+    static verifyAccessToken(token) {
+        const secret = process.env.JWT_ACCESS_SECRET;
+        if (!secret) {
+            throw new Error("JWT_ACCESS_SECRET is not defined");
+        }
+        return jsonwebtoken_1.default.verify(token, secret);
+    }
+    static verifyRefreshToken(token) {
+        const secret = process.env.JWT_REFRESH_SECRET;
+        if (!secret) {
+            throw new Error("JWT_REFRESH_SECRET is not defined");
         }
         return jsonwebtoken_1.default.verify(token, secret);
     }

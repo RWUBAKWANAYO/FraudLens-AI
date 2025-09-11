@@ -1,10 +1,14 @@
-// server/src/types/auth.ts
 import { UserRole } from "@prisma/client";
-export interface JwtPayload {
+export interface AccessTokenPayload {
   userId: string;
   email: string;
   companyId: string;
   role: string;
+}
+
+export interface RefreshTokenPayload {
+  userId: string;
+  email: string;
 }
 
 export interface RegisterRequest {

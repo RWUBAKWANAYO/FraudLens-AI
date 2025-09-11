@@ -65,19 +65,33 @@ class AuthController {
                 if (!isValidPassword) {
                     return res.status(401).json({ error: "Invalid credentials" });
                 }
-                // Update last login
                 yield db_1.prisma.user.update({
                     where: { id: user.id },
                     data: { lastLogin: new Date() },
                 });
-                const token = auth_1.AuthUtils.generateToken({
+                const accessToken = auth_1.AuthUtils.generateAccessToken({
                     userId: user.id,
                     email: user.email,
                     companyId: user.companyId,
                     role: user.role,
                 });
+                const refreshToken = auth_1.AuthUtils.generateRefreshToken({
+                    userId: user.id,
+                    email: user.email,
+                });
+                yield db_1.prisma.user.update({
+                    where: { id: user.id },
+                    data: { refreshToken, lastLogin: new Date() },
+                });
+                const isProduction = process.env.NODE_ENV === "production";
+                res.cookie("jwt", refreshToken, {
+                    httpOnly: true,
+                    secure: isProduction,
+                    sameSite: isProduction ? "none" : "lax",
+                    maxAge: 7 * 24 * 60 * 60 * 1000,
+                });
                 res.json({
-                    token,
+                    accessToken,
                     user: {
                         id: user.id,
                         email: user.email,
@@ -93,6 +107,90 @@ class AuthController {
             }
             catch (error) {
                 res.status(400).json({ error: error.message });
+            }
+        });
+    }
+    static refreshToken(req, res) {
+        return __awaiter(this, void 0, void 0, function* () {
+            try {
+                const cookies = req.cookies;
+                if (!(cookies === null || cookies === void 0 ? void 0 : cookies.jwt)) {
+                    return res.status(401).json({ error: "Refresh token required" });
+                }
+                const refreshToken = cookies.jwt;
+                const user = yield db_1.prisma.user.findFirst({
+                    where: { refreshToken },
+                    include: { company: true },
+                });
+                if (!user) {
+                    res.clearCookie("jwt");
+                    return res.status(403).json({ error: "Invalid refresh token" });
+                }
+                try {
+                    const decoded = auth_1.AuthUtils.verifyRefreshToken(refreshToken);
+                    if (user.id !== decoded.userId) {
+                        yield db_1.prisma.user.update({
+                            where: { id: user.id },
+                            data: { refreshToken: null },
+                        });
+                        res.clearCookie("jwt");
+                        return res.status(403).json({ error: "Token mismatch" });
+                    }
+                    const accessToken = auth_1.AuthUtils.generateAccessToken({
+                        userId: user.id,
+                        email: user.email,
+                        companyId: user.companyId,
+                        role: user.role,
+                    });
+                    res.json({ accessToken });
+                }
+                catch (error) {
+                    if (error.name === "TokenExpiredError") {
+                        yield db_1.prisma.user.update({
+                            where: { id: user.id },
+                            data: { refreshToken: null },
+                        });
+                        res.clearCookie("jwt");
+                        return res.status(403).json({ error: "Refresh token expired" });
+                    }
+                    yield db_1.prisma.user.update({
+                        where: { id: user.id },
+                        data: { refreshToken: null },
+                    });
+                    res.clearCookie("jwt");
+                    return res.status(403).json({ error: "Invalid refresh token" });
+                }
+            }
+            catch (error) {
+                console.error("Refresh token error:", error);
+                res.status(500).json({ error: "Internal server error" });
+            }
+        });
+    }
+    static logout(req, res) {
+        return __awaiter(this, void 0, void 0, function* () {
+            try {
+                const cookies = req.cookies;
+                if (!(cookies === null || cookies === void 0 ? void 0 : cookies.jwt)) {
+                    res.clearCookie("jwt");
+                    return res.sendStatus(204);
+                }
+                const refreshToken = cookies.jwt;
+                const user = yield db_1.prisma.user.findFirst({
+                    where: { refreshToken },
+                });
+                if (user) {
+                    yield db_1.prisma.user.update({
+                        where: { id: user.id },
+                        data: { refreshToken: null },
+                    });
+                }
+                res.clearCookie("jwt");
+                res.sendStatus(204);
+            }
+            catch (error) {
+                console.error("Logout error:", error);
+                res.status(500).json({ error: "Internal server error" });
             }
         });
     }

@@ -10,6 +10,8 @@ exports.authRouter = router;
 router.post("/register", validation_1.registerValidation, validation_1.validateRequest, authController_1.AuthController.register);
 router.post("/verify-email", authController_1.AuthController.verifyEmail);
 router.post("/login", validation_1.loginValidation, validation_1.validateRequest, authController_1.AuthController.login);
+router.post("/refresh-token", authController_1.AuthController.refreshToken);
+router.post("/logout", auth_1.authenticateTokenOrApiKey, authController_1.AuthController.logout);
 router.post("/invite", auth_1.authenticateTokenOrApiKey, (0, auth_1.requireRole)(["ADMIN", "MANAGER"]), validation_1.inviteUserValidation, validation_1.validateRequest, authController_1.AuthController.inviteUser);
 router.post("/accept-invitation", authController_1.AuthController.acceptInvitation);
 router.post("/forgot-password", validation_1.forgotPasswordValidation, validation_1.validateRequest, authController_1.AuthController.forgotPassword);

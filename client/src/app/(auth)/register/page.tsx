@@ -2,7 +2,7 @@
 
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
-import { registerSchema, type RegisterFormData } from "@/lib/schemas/auth";
+import { registerSchema, type RegisterFormData } from "@/lib/zod-schemas/auth";
 import { useRegister } from "@/hooks/useAuth";
 
 const Register = () => {
