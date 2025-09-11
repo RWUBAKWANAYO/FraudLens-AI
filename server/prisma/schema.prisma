@@ -230,6 +230,7 @@ model Alert {
 model WebhookSubscription {
   id         String            @id @default(uuid())
   companyId  String
+  name       String
   url        String
   secret     String
   events     Json

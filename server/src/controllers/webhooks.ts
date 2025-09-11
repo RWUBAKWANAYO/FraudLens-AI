@@ -5,7 +5,7 @@ import crypto from "crypto";
 
 export const createWebhook = async (req: Request, res: Response, next: NextFunction) => {
   try {
-    const { url, events, secret } = req.body;
+    const { url, events, secret, name } = req.body;
     const companyId = req.user?.companyId;
 
     if (!companyId) {
@@ -15,6 +15,7 @@ export const createWebhook = async (req: Request, res: Response, next: NextFunct
     const webhook = await prisma.webhookSubscription.create({
       data: {
         companyId,
+        name,
         url,
         events,
         secret: secret || crypto.randomBytes(32).toString("hex"),
@@ -47,17 +48,32 @@ export async function listWebhooks(req: Request, res: Response) {
       include: {
         deliveries: {
           orderBy: { createdAt: "desc" },
-          take: 10,
+          take: 1,
+          select: {
+            id: true,
+            event: true,
+            success: true,
+            attempt: true,
+            error: true,
+            responseTime: true,
+            environment: true,
+            createdAt: true,
+          },
         },
       },
+      orderBy: { createdAt: "desc" },
     });
 
     const webhooksWithParsedEvents = webhooks.map((webhook) => ({
       ...webhook,
       events: Array.isArray(webhook.events) ? webhook.events : JSON.parse(webhook.events as string),
+      lastDelivery: webhook.deliveries.length > 0 ? webhook.deliveries[0] : null,
+      deliveries: undefined,
     }));
 
-    res.json(webhooksWithParsedEvents);
+    const responseWebhooks = webhooksWithParsedEvents.map(({ deliveries, ...webhook }) => webhook);
+
+    res.json(responseWebhooks);
   } catch (error) {
     console.error("Failed to fetch webhooks:", error);
     res.status(500).json({ error: "Failed to fetch webhooks" });

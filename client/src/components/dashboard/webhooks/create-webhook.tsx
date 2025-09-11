@@ -6,48 +6,58 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Modal } from "@mui/material";
 import { useState } from "react";
-import { Globe, Bell, Shield, Plus } from "lucide-react";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
+import { Globe, Bell, Plus, Loader2Icon } from "lucide-react";
 import { Checkbox } from "@/components/ui/checkbox";
-
-type WebhookEvent =
-  | "transaction.created"
-  | "transaction.updated"
-  | "chargeback.created"
-  | "refund.processed";
+import { useForm } from "react-hook-form";
+import { zodResolver } from "@hookform/resolvers/zod";
+import {
+  createWebhookSchema,
+  type CreateWebhookFormData,
+  type WebhookEvent,
+} from "@/lib/zod-schemas/webhooks";
+import { useCreateWebhook } from "@/hooks/useWebhooks";
+import { ErrorCard } from "@/components/common/status-message";
 
 const eventOptions: { value: WebhookEvent; label: string }[] = [
-  { value: "transaction.created", label: "Transaction Created" },
-  { value: "transaction.updated", label: "Transaction Updated" },
-  { value: "chargeback.created", label: "Chargeback Created" },
-  { value: "refund.processed", label: "Refund Processed" },
+  { value: "threat.created", label: "Threat Created" },
+  { value: "upload.complete", label: "Upload Complete" },
+  { value: "upload.progress", label: "Upload Progress" },
 ];
 
 export function CreateWebhook() {
   const [isModalOpen, setIsModalOpen] = useState(false);
-  const [name, setName] = useState("");
-  const [url, setUrl] = useState("");
-  const [selectedEvents, setSelectedEvents] = useState<WebhookEvent[]>([]);
+  const { mutate: createWebhook, isPending, error } = useCreateWebhook();
 
-  const handleSubmit = (e: React.FormEvent) => {
-    e.preventDefault();
-    console.log("Creating webhook:", { name, url, events: selectedEvents });
-    setIsModalOpen(false);
-    setName("");
-    setUrl("");
-    setSelectedEvents([]);
+  const {
+    register,
+    handleSubmit,
+    setValue,
+    watch,
+    reset,
+    formState: { errors },
+  } = useForm<CreateWebhookFormData>({
+    resolver: zodResolver(createWebhookSchema),
+    defaultValues: {
+      events: [],
+    },
+  });
+
+  const selectedEvents = watch("events") || [];
+
+  const onSubmit = (data: CreateWebhookFormData) => {
+    createWebhook(data, {
+      onSuccess: () => {
+        setIsModalOpen(false);
+        reset();
+      },
+    });
   };
 
   const toggleEvent = (event: WebhookEvent) => {
-    setSelectedEvents((prev) =>
-      prev.includes(event) ? prev.filter((e) => e !== event) : [...prev, event]
-    );
+    const newEvents = selectedEvents.includes(event)
+      ? selectedEvents.filter((e) => e !== event)
+      : [...selectedEvents, event];
+    setValue("events", newEvents, { shouldValidate: true });
   };
 
   return (
@@ -67,18 +77,20 @@ export function CreateWebhook() {
             <CardDescription>Set up a new webhook subscription</CardDescription>
           </CardHeader>
           <CardContent>
-            <form onSubmit={handleSubmit} className="flex flex-col gap-6">
+            {error && <ErrorCard error={error} classNames="mb-4" />}
+
+            <form onSubmit={handleSubmit(onSubmit)} className="flex flex-col gap-6">
               <div className="grid gap-3">
                 <Label htmlFor="name">Webhook Name</Label>
                 <Input
                   id="name"
                   type="text"
                   placeholder="ex: Production Transactions"
-                  value={name}
-                  onChange={(e) => setName(e.target.value)}
+                  {...register("name")}
                   required
                   className="border-accent-foreground focus:border-colored-primary focus-visible:ring-colored-primary"
                 />
+                {errors.name && <p className="text-sm text-red-600">{errors.name.message}</p>}
               </div>
 
               <div className="grid gap-3">
@@ -87,11 +99,24 @@ export function CreateWebhook() {
                   id="url"
                   type="url"
                   placeholder="https://your-domain.com/webhooks"
-                  value={url}
-                  onChange={(e) => setUrl(e.target.value)}
+                  {...register("url")}
                   required
                   className="border-accent-foreground focus:border-colored-primary focus-visible:ring-colored-primary"
                 />
+                {errors.url && <p className="text-sm text-red-600">{errors.url.message}</p>}
+              </div>
+
+              <div className="grid gap-3">
+                <Label htmlFor="secret">Secret Key</Label>
+                <Input
+                  id="secret"
+                  type="text"
+                  placeholder="Enter secret key"
+                  {...register("secret")}
+                  required
+                  className="border-accent-foreground focus:border-colored-primary focus-visible:ring-colored-primary"
+                />
+                {errors.secret && <p className="text-sm text-red-600">{errors.secret.message}</p>}
               </div>
 
               <div className="grid gap-3">
@@ -113,11 +138,20 @@ export function CreateWebhook() {
                     </div>
                   ))}
                 </div>
+                {errors.events && <p className="text-sm text-red-600">{errors.events.message}</p>}
               </div>
 
-              <Button type="submit" className="w-full bg-colored-primary text-white colored-button">
-                <Bell className="h-4 w-4 mr-2" />
-                Create Webhook
+              <Button
+                type="submit"
+                disabled={isPending}
+                className="w-full bg-colored-primary text-white colored-button"
+              >
+                {isPending ? (
+                  <Loader2Icon className="h-4 w-4 mr-2 animate-spin" />
+                ) : (
+                  <Bell className="h-4 w-4 mr-2" />
+                )}
+                {isPending ? "Creating..." : "Create Webhook"}
               </Button>
             </form>
           </CardContent>

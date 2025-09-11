@@ -91,9 +91,7 @@ export function InviteUser() {
                 <Label htmlFor="role">Role</Label>
                 <Select
                   value={selectedRole}
-                  onValueChange={(value) =>
-                    setValue("role", value as InviteUserFormData["role"], { shouldValidate: true })
-                  }
+                  onValueChange={(value) => setValue("role", value as InviteUserFormData["role"])}
                 >
                   <SelectTrigger className="border-accent-foreground focus:border-colored-primary focus:ring-colored-primary">
                     <SelectValue placeholder="Select a role" />
