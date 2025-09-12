@@ -10,7 +10,16 @@ export class ThreatService {
     companyId: string,
     params: ThreatQueryParams
   ): Promise<{ data: any[]; pagination: PaginationResult }> {
-    const { sortBy, sortOrder, page = 1, limit = 50, search, ...filters } = params;
+    const {
+      sortBy,
+      sortOrder,
+      page = 1,
+      limit = 50,
+      search,
+      startDate,
+      endDate,
+      ...filters
+    } = params;
 
     const where = QueryBuilder.buildWhere(
       { companyId },
@@ -19,7 +28,7 @@ export class ThreatService {
       search
     );
 
-    QueryBuilder.buildDateRange(where, params.startDate, params.endDate);
+    QueryBuilder.buildDateRange(where, startDate, endDate);
 
     const pagination = QueryBuilder.buildPagination(page, limit);
 

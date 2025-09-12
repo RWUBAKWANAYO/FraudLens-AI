@@ -3,16 +3,25 @@
 import { Button } from "@/components/ui/button";
 import { Modal } from "@mui/material";
 import { useState } from "react";
-import { ThumbsDown, ThumbsUp } from "lucide-react";
+import { Brain } from "lucide-react";
+import { useThreatDetails } from "@/hooks/useThreats";
+import { Threat } from "@/types/threat";
+import moment from "moment";
+import { StatusMessage } from "../common/status-message";
 
-export interface IThreat {
-  id: string;
-  title: string;
-  description: string;
+interface ThreatExplanationProps {
+  threat: Threat;
 }
 
-export function ThreatExplanation({ threat }: { threat: IThreat }) {
+export function ThreatExplanation({ threat }: ThreatExplanationProps) {
   const [isModalOpen, setIsModalOpen] = useState(false);
+  const {
+    data: threatDetails,
+    isLoading,
+    error,
+  } = useThreatDetails(threat.id, { enabled: isModalOpen });
+
+  const aiExplanation = threatDetails?.metadata?.aiExplanation || "";
 
   const handleSubmit = () => {
     setIsModalOpen(true);
@@ -26,51 +35,49 @@ export function ThreatExplanation({ threat }: { threat: IThreat }) {
         keepMounted
         sx={{ display: "flex", alignItems: "center", justifyContent: "center" }}
       >
-        <div className="p-4 space-y-4 border border-accent-foreground  rounded-lg bg-foreground shadow-sm w-full sm:w-[600px]">
+        <div className="p-6 space-y-4 border border-accent-foreground rounded-lg bg-foreground shadow-sm w-full sm:w-[700px] max-h-[80vh] overflow-y-auto">
           <div className="flex items-center justify-between gap-4">
-            <h2 className="text-lg font-bold text-primary">{threat.title}</h2>
-            <p className="text-sm font-medium text-primary-foreground">06 June 2023</p>
+            <h2 className="text-lg font-bold text-primary flex items-center gap-2">
+              <Brain className="h-5 w-5" />
+              AI Threat Analysis
+            </h2>
+            <p className="text-sm font-medium text-primary-foreground">
+              {moment(threat.createdAt).fromNow()}
+            </p>
           </div>
-          <p className="text-sm text-primary-foreground">
-            Lorem ipsum dolor sit amet consectetur adipisicing elit. Iusto ad est necessitatibus
-            aperiam sit eos placeat laborum sapiente quod mollitia itaque, fuga maxime totam sequi
-            quas magni ullam aspernatur ex? Lorem ipsum dolor sit amet consectetur adipisicing elit.
-            Iusto ad est necessitatibus aperiam sit eos placeat laborum sapiente quod mollitia
-            itaque, fuga maxime totam sequi quas magni ullam aspernatur ex? Lorem ipsum dolor sit
-            amet consectetur adipisicing elit. Iusto ad est necessitatibus aperiam sit eos placeat
-            laborum sapiente quod mollitia itaque, fuga maxime totam sequi quas magni ullam
-            aspernatur ex?
-          </p>
-          <div className="w-full flex flex-col gap-4">
-            <h2>Was this helpful? </h2>
-            <div className="flex items-center gap-3">
-              <Button
-                type="button"
-                onClick={() => {}}
-                size={"sm"}
-                className="bg-colored-primary colored-button rounded-sm text-white"
-              >
-                <ThumbsUp />
-                Yes
-              </Button>
-              <Button
-                type="button"
-                onClick={() => {}}
-                size={"sm"}
-                className="bg-colored-primary colored-button rounded-sm text-white"
-              >
-                <ThumbsDown />
-                No
-              </Button>
+
+          {(isLoading || error) && (
+            <StatusMessage isLoading={isLoading} error={error} classNames="text-center" />
+          )}
+
+          {aiExplanation && (
+            <>
+              <div className="p-4 bg-accent rounded-md">
+                <p className="text-primary text-sm whitespace-pre-wrap">{aiExplanation}</p>
+              </div>
+
+              {threatDetails?.metadata?.aiGeneratedAt && (
+                <div className="text-xs text-muted-foreground text-right">
+                  Generated at:{" "}
+                  {moment(threatDetails.metadata.aiGeneratedAt).format("MMMM Do YYYY")}
+                </div>
+              )}
+            </>
+          )}
+
+          {!isLoading && !error && !aiExplanation && (
+            <div className="text-muted-foreground text-center py-8">
+              No AI explanation available for this threat.
             </div>
-          </div>
+          )}
         </div>
       </Modal>
       <Button
         type="button"
-        onClick={() => handleSubmit()}
-        className="border border-colored-primary colored-button rounded-sm shadow-none text-colored-primary bg-transparent"
+        onClick={handleSubmit}
+        className="border border-colored-primary colored-button rounded-sm shadow-none text-colored-primary bg-transparent flex items-center gap-2"
       >
+        <Brain className="h-4 w-4" />
         Explain with AI
       </Button>
     </div>

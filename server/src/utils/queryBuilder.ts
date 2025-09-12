@@ -29,7 +29,14 @@ export class QueryBuilder {
   ) {
     const where = { ...baseWhere };
 
-    for (const [key, value] of Object.entries(filters)) {
+    const dateRangeParams = ["startDate", "endDate"];
+    const regularFilters = { ...filters };
+
+    dateRangeParams.forEach((param) => {
+      delete regularFilters[param];
+    });
+
+    for (const [key, value] of Object.entries(regularFilters)) {
       if (value !== undefined && value !== null && value !== "") {
         if (key.includes("Min") || key.includes("Max")) {
           const field = key.replace(/(Min|Max)$/, "");
@@ -61,9 +68,17 @@ export class QueryBuilder {
     field: string = "createdAt"
   ) {
     if (startDate || endDate) {
-      where[field] = {};
-      if (startDate) where[field].gte = new Date(startDate);
-      if (endDate) where[field].lte = new Date(endDate);
+      where[field] = where[field] || {};
+      if (startDate) {
+        const startDateObj = new Date(startDate);
+        startDateObj.setHours(0, 0, 0, 0);
+        where[field].gte = startDateObj;
+      }
+      if (endDate) {
+        const endDateObj = new Date(endDate);
+        endDateObj.setHours(23, 59, 59, 999);
+        where[field].lte = endDateObj;
+      }
     }
     return where;
   }

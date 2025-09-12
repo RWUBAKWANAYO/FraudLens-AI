@@ -20,6 +20,7 @@ import {
   useReactivateApiKey,
   useRotateApiKeySecret,
 } from "@/hooks/useApiKeys";
+import { StatusMessage } from "@/components/common/status-message";
 
 export default function ApiKeysList() {
   const { data: apiKeys, isLoading, error } = useApiKeys();
@@ -39,23 +40,8 @@ export default function ApiKeysList() {
     rotateMutation.mutate(apiKeyId);
   };
 
-  if (isLoading) {
-    return (
-      <div
-        className="bg-foreground rounded-lg p-6 flex items-center justify-center"
-        style={{ minHeight: "calc(100vh - 120px)" }}
-      >
-        <Loader2Icon className="h-8 w-8 animate-spin" />
-      </div>
-    );
-  }
-
-  if (error) {
-    return (
-      <div className="bg-foreground rounded-lg p-6" style={{ minHeight: "calc(100vh - 120px)" }}>
-        <div className="text-red-500">Error loading API keys: {error.message}</div>
-      </div>
-    );
+  if (isLoading || error) {
+    return <StatusMessage isLoading={isLoading} error={error} height="calc(100vh - 120px)" />;
   }
 
   return (

@@ -28,9 +28,9 @@ const leakExplanation_1 = require("./leakExplanation");
 class ThreatService {
     static findMany(companyId, params) {
         return __awaiter(this, void 0, void 0, function* () {
-            const { sortBy, sortOrder, page = 1, limit = 50, search } = params, filters = __rest(params, ["sortBy", "sortOrder", "page", "limit", "search"]);
+            const { sortBy, sortOrder, page = 1, limit = 50, search, startDate, endDate } = params, filters = __rest(params, ["sortBy", "sortOrder", "page", "limit", "search", "startDate", "endDate"]);
             const where = queryBuilder_1.QueryBuilder.buildWhere({ companyId }, filters, ["description", "threatType"], search);
-            queryBuilder_1.QueryBuilder.buildDateRange(where, params.startDate, params.endDate);
+            queryBuilder_1.QueryBuilder.buildDateRange(where, startDate, endDate);
             const pagination = queryBuilder_1.QueryBuilder.buildPagination(page, limit);
             const orderBy = queryBuilder_1.QueryBuilder.buildSort(sortBy, sortOrder, {
                 validSortFields: constants_1.VALID_THREAT_SORT_FIELDS,

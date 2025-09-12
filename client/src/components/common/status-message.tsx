@@ -9,6 +9,7 @@ type StatusMessageProps = {
   height?: string | number;
   width?: string | number;
   classNames?: string;
+  info?: string;
 };
 
 export const ErrorCard: React.FC<StatusMessageProps> = ({ error, classNames = "" }) => {
@@ -23,14 +24,15 @@ export const ErrorCard: React.FC<StatusMessageProps> = ({ error, classNames = ""
 export const StatusMessage: React.FC<StatusMessageProps> = ({
   isLoading = false,
   error = null,
+  info,
   height = "100%",
   width = "100%",
-  classNames = "bg-foreground",
+  classNames = "bg-foreground items-center",
 }) => {
   if (isLoading) {
     return (
       <div
-        className={`rounded-lg p-4 sm:p-6 space-y-6 flex items-center justify-center ${classNames}`}
+        className={`rounded-lg p-4 sm:p-6 flex justify-center ${classNames}`}
         style={{ height, width }}
       >
         <Loader2 className="h-8 w-8 animate-spin text-primary" />
@@ -41,10 +43,21 @@ export const StatusMessage: React.FC<StatusMessageProps> = ({
   if (error) {
     return (
       <div
-        className={`rounded-lg p-4 sm:p-6 space-y-6 flex items-center justify-center ${classNames}`}
+        className={`rounded-lg p-4 sm:p-6 flex justify-center ${classNames}`}
         style={{ height, width }}
       >
         <ErrorCard error={error} />
+      </div>
+    );
+  }
+
+  if (info) {
+    return (
+      <div
+        className={`rounded-lg p-4 sm:p-6 flex justify-center ${classNames}`}
+        style={{ height, width }}
+      >
+        <p className="text-sm text-primary">{info}</p>
       </div>
     );
   }

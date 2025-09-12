@@ -131,7 +131,7 @@ Date Range Picker
 ================================================
  */
   .custom-input {
-    @apply w-full py-2 rounded-md border border-accent-foreground bg-foreground text-sm focus:outline-none focus:ring-0 focus:border-colored-primary disabled:cursor-not-allowed disabled:opacity-50;
+    @apply w-full py-2 rounded-md border border-accent-foreground bg-foreground text-sm focus:outline-none focus:ring-0 focus:border-colored-primary disabled:cursor-not-allowed disabled:opacity-50 placeholder:text-primary-foreground;
   }
 
   .custom-calendar {

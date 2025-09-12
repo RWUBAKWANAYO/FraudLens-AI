@@ -26,8 +26,8 @@ export function DateRangePicker({
   }, [start, end]);
 
   return (
-    <div className="w-full xl:w-fit flex flex-col gap-3">
-      {title && <label className="text-sm font-medium px-1">{title}</label>}
+    <div className="w-full xl:w-fit flex flex-col gap-2">
+      {title && <label className="text-sm font-semibold px-1">{title}</label>}
       <div className="w-full flex flex-col sm:flex-row items-center gap-3">
         <div className="relative flex-1 w-full sm:w-auto">
           <DatePicker
