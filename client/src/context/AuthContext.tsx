@@ -33,16 +33,15 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       setLoading(true);
       const resp = await api.post("/auth/refresh-token", {}, { withCredentials: true });
       const accessToken = resp.data?.accessToken;
+      const user = resp.data?.user;
 
-      if (accessToken) {
-        setAccessToken(accessToken);
-
-        const me = await api.get("/auth/me");
-        setUser(me.data.user);
-      } else {
+      if (!accessToken || !user) {
         setAccessToken(null);
         setUser(null);
+        return;
       }
+      setAccessToken(accessToken);
+      setUser(user);
     } catch (err) {
       setAccessToken(null);
       setUser(null);

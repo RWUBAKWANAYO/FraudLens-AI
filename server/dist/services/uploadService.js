@@ -75,13 +75,15 @@ function createUploadRecord(options) {
 }
 function getUploadsList(companyId_1) {
     return __awaiter(this, arguments, void 0, function* (companyId, options = {}) {
-        const { page = 1, limit = 50, sortBy, sortOrder = "desc", searchTerm, filters = {} } = options;
+        const { page = 1, limit = 50, sortBy, sortOrder = "desc", searchTerm, startDate, endDate, filters = {}, } = options;
         const pagination = queryBuilder_1.QueryBuilder.buildPagination(page, limit);
         let where = {
             companyId,
             OR: [{ fileSize: { gt: 1 } }, { fileName: { not: "direct-data-upload" } }],
         };
         where = queryBuilder_1.QueryBuilder.buildWhere(where, filters, ["fileName", "fileType"], searchTerm);
+        console.log(startDate, endDate, "++++++++");
+        where = queryBuilder_1.QueryBuilder.buildDateRange(where, startDate, endDate, "createdAt");
         if (filters.createdAtMin || filters.createdAtMax) {
             where = queryBuilder_1.QueryBuilder.buildDateRange(where, filters.createdAtMin, filters.createdAtMax, "createdAt");
         }

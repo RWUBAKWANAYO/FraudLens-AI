@@ -55,6 +55,8 @@ function uploadList(req, res, next) {
             const sortBy = req.query.sortBy;
             const sortOrder = req.query.sortOrder;
             const searchTerm = req.query.search;
+            const startDate = req.query.startDate;
+            const endDate = req.query.endDate;
             const filters = {
                 status: req.query.status,
                 fileType: req.query.fileType,
@@ -70,6 +72,8 @@ function uploadList(req, res, next) {
                 sortBy,
                 sortOrder,
                 searchTerm,
+                startDate,
+                endDate,
                 filters,
             });
             res.json(result);

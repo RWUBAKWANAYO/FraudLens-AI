@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { Input } from "@/components/ui/input";
 import {
   Select,
@@ -19,8 +19,12 @@ import { Button } from "@/components/ui/button";
 import { THREAT_TYPES } from "@/types/threat";
 import { getThreatTypeShortLabel } from "@/lib/constants";
 import { StatusMessage } from "@/components/common/status-message";
+import { useDebounce } from "@/hooks/useDebounce";
 
 export default function Threats() {
+  const [searchTerm, setSearchTerm] = useState("");
+  const debouncedSearchTerm = useDebounce(searchTerm, 500);
+
   const [queryParams, setQueryParams] = useState<ThreatQueryParams>({
     page: 1,
     limit: 6,
@@ -28,14 +32,25 @@ export default function Threats() {
     sortOrder: "desc",
   });
 
-  const { data: threatsResponse, isLoading, error } = useThreats(queryParams);
+  const {
+    data: threatsResponse,
+    isLoading,
+    error,
+  } = useThreats({
+    ...queryParams,
+    search: debouncedSearchTerm || undefined,
+  });
 
-  const handleSearch = (search: string) => {
+  useEffect(() => {
     setQueryParams((prev) => ({
       ...prev,
-      search: search || undefined,
+      search: debouncedSearchTerm || undefined,
       page: 1,
     }));
+  }, [debouncedSearchTerm]);
+
+  const handleSearchInput = (search: string) => {
+    setSearchTerm(search);
   };
 
   const handleThreatTypeFilter = (threatType: string) => {
@@ -68,6 +83,7 @@ export default function Threats() {
   };
 
   const clearAllFilters = () => {
+    setSearchTerm("");
     setQueryParams({
       page: 1,
       limit: 6,
@@ -77,7 +93,7 @@ export default function Threats() {
   };
 
   const hasActiveFilters =
-    queryParams.search ||
+    searchTerm ||
     queryParams.threatType ||
     queryParams.startDate ||
     queryParams.endDate ||
@@ -97,17 +113,16 @@ export default function Threats() {
         <div className="flex flex-col flex-grow">
           <div className="flex items-center justify-between">
             <h2 className="text-lg font-bold">Fraud Alert List</h2>
-            {hasActiveFilters && (
-              <Button
-                onClick={clearAllFilters}
-                className="colored-button bg-colored-primary text-white font-semibold"
-              >
-                <X className="h-4 w-4" />
-                Clear Filters
-              </Button>
-            )}
+            <Button
+              onClick={clearAllFilters}
+              className="colored-button bg-colored-primary text-white font-semibold"
+              disabled={!hasActiveFilters}
+            >
+              <X className="h-4 w-4" />
+              Clear Filters
+            </Button>
           </div>
-          <div className="w-full flex flex-col xl:flex-row items-start xl:items-end justify-between gap-4 mt-4 mb-6">
+          <div className="w-full flex flex-col xl:flex-row items-start xl:items-end justify-between gap-4 mt-4 mb-10">
             <DateRangePicker title="Date Range" onChange={handleDateRangeChange} />
 
             <div className="flex flex-col sm:flex-row items-start sm:items-end gap-4 w-full xl:w-auto">
@@ -149,8 +164,8 @@ export default function Threats() {
                 <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-400" />
                 <Input
                   placeholder="Search threats..."
-                  value={queryParams.search || ""}
-                  onChange={(e) => handleSearch(e.target.value)}
+                  value={searchTerm}
+                  onChange={(e) => handleSearchInput(e.target.value)}
                   className="pl-10 h-10 w-full xl:w-[200px] 2xl:w-[250px] border-accent-foreground focus:border-colored-primary focus-visible:ring-0"
                 />
               </div>

@@ -47,6 +47,8 @@ export async function uploadList(req: Request, res: Response, next: NextFunction
     const sortBy = req.query.sortBy as string;
     const sortOrder = req.query.sortOrder as "asc" | "desc";
     const searchTerm = req.query.search as string;
+    const startDate = req.query.startDate as string;
+    const endDate = req.query.endDate as string;
 
     const filters = {
       status: req.query.status as string,
@@ -64,6 +66,8 @@ export async function uploadList(req: Request, res: Response, next: NextFunction
       sortBy,
       sortOrder,
       searchTerm,
+      startDate,
+      endDate,
       filters,
     });
 
