@@ -5,14 +5,12 @@ import { Button } from "@/components/ui/button";
 import { Eye, EyeOff, Copy, Check } from "lucide-react";
 
 type CopyableCellProps = {
-  id: string;
   value: string;
   maskable?: boolean;
   defaultVisible?: boolean;
 };
 
 export function CopyableCell({
-  id,
   value,
   maskable = false,
   defaultVisible = false,

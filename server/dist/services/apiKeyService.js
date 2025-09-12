@@ -46,15 +46,6 @@ class ApiKeyService {
         return __awaiter(this, void 0, void 0, function* () {
             return db_1.prisma.apiKey.findMany({
                 where: { companyId },
-                select: {
-                    id: true,
-                    name: true,
-                    key: true,
-                    enabled: true,
-                    expiresAt: true,
-                    lastUsedAt: true,
-                    createdAt: true,
-                },
                 orderBy: { createdAt: "desc" },
             });
         });

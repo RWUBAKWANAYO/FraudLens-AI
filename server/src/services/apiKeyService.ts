@@ -46,15 +46,6 @@ export class ApiKeyService {
   static async listApiKeys(companyId: string) {
     return prisma.apiKey.findMany({
       where: { companyId },
-      select: {
-        id: true,
-        name: true,
-        key: true,
-        enabled: true,
-        expiresAt: true,
-        lastUsedAt: true,
-        createdAt: true,
-      },
       orderBy: { createdAt: "desc" },
     });
   }

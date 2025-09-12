@@ -129,7 +129,7 @@ const handleApiKeyAuth = async (
 
     if (!apiKey) {
       return res.status(401).json({
-        error: "Invalid API credentials",
+        error: "Invalid API credentials or API key not found or disabled",
       });
     }
 

@@ -114,7 +114,7 @@ const handleApiKeyAuth = (req, res, next, credentials) => __awaiter(void 0, void
         });
         if (!apiKey) {
             return res.status(401).json({
-                error: "Invalid API credentials",
+                error: "Invalid API credentials or API key not found or disabled",
             });
         }
         yield db_1.prisma.apiKey.updateMany({
