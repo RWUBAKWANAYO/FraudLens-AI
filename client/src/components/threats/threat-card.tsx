@@ -3,16 +3,13 @@ import { ThreatExplanation } from "./threat-explanation";
 import { Threat } from "@/types/threat";
 import { Badge } from "@/components/ui/badge";
 import moment from "moment";
+import { formatThreatType } from "@/lib/utils";
 
 interface ThreatCardProps {
   threat: Threat;
 }
 
 export const ThreatCard = ({ threat }: ThreatCardProps) => {
-  const formatThreatType = (threatType: string) => {
-    return threatType.replace(/_/g, " ").replace(/\b\w/g, (l) => l.toUpperCase());
-  };
-
   return (
     <div className="p-4 space-y-3 border border-accent-foreground rounded-lg shadow bg-foreground">
       <div className="flex items-center justify-between">

@@ -19,6 +19,7 @@ import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { inviteUserSchema, type InviteUserFormData } from "@/lib/zod-schemas/users";
 import { useInviteUser } from "@/hooks/useUsers";
+import { ErrorCard } from "@/components/common/status-message";
 
 export function InviteUser() {
   const [isModalOpen, setIsModalOpen] = useState(false);
@@ -69,11 +70,7 @@ export function InviteUser() {
             <CardDescription>Send an invitation to join your team</CardDescription>
           </CardHeader>
           <CardContent>
-            {error && (
-              <div className="bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded mb-4">
-                {error.message}
-              </div>
-            )}
+            {error && <ErrorCard error={error} classNames="mb-4" />}
 
             <form onSubmit={handleSubmit(onSubmit)} className="flex flex-col gap-6">
               <div className="grid gap-3">

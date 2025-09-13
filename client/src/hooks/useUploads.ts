@@ -1,3 +1,5 @@
+"use client";
+
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { api, getAccessToken } from "@/lib/api";
 import { UploadsResponse, UploadQueryParams } from "@/types/upload";
@@ -58,6 +60,39 @@ export const useDownloadUpload = () => {
       toast({
         title: "Error",
         description: err?.message || "Something went wrong",
+        style: {
+          background: "var(--foreground)",
+          color: "var(--primary-red)",
+          border: "1px solid var(--primary-red)",
+        },
+      });
+    },
+  });
+};
+
+// UPLOAD FILE
+export const useUpload = () => {
+  const { toast } = useToast();
+
+  return useMutation({
+    mutationFn: async ({ file, companyId }: { file: File; companyId: string }) => {
+      const formData = new FormData();
+      formData.append("file", file);
+      formData.append("companyId", companyId);
+
+      const response = await api.post("/audit/upload", formData, {
+        headers: {
+          "Content-Type": "multipart/form-data",
+          Authorization: `Bearer ${getAccessToken()}`,
+        },
+      });
+
+      return response.data;
+    },
+    onError: (error: any) => {
+      toast({
+        title: "Error",
+        description: error?.message || "Something went wrong",
         style: {
           background: "var(--foreground)",
           color: "var(--primary-red)",

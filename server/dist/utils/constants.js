@@ -1,7 +1,7 @@
 "use strict";
 var _a, _b, _c, _d;
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.DEFAULT_FIELD_MAPPING = exports.VALID_ALERT_SORT_FIELDS = exports.ALERT_INCLUDE = exports.VALID_THREAT_SORT_FIELDS = exports.THREAT_INCLUDE = exports.WEBHOOK_DLQ = exports.WEBHOOK_RETRY_QUEUE = exports.WEBHOOK_QUEUE = exports.THREAT_TYPE_MAP = exports.SIMILARITY_BATCH_SIZE = exports.SIMILARITY_SEARCH_LIMIT = exports.SIMILARITY_SUSPICIOUS_THRESHOLD = exports.SIMILARITY_DUP_THRESHOLD = exports.AMOUNT_TOLERANCE_CENTS = exports.TS_TOLERANCE_SEC = exports.RULE = exports.SEVERITY = void 0;
+exports.jsonMimeTypes = exports.excelMimeTypes = exports.csvMimeTypes = exports.pdfMimeTypes = exports.DEFAULT_FIELD_MAPPING = exports.VALID_ALERT_SORT_FIELDS = exports.ALERT_INCLUDE = exports.VALID_THREAT_SORT_FIELDS = exports.THREAT_INCLUDE = exports.WEBHOOK_DLQ = exports.WEBHOOK_RETRY_QUEUE = exports.WEBHOOK_QUEUE = exports.THREAT_TYPE_MAP = exports.SIMILARITY_BATCH_SIZE = exports.SIMILARITY_SEARCH_LIMIT = exports.SIMILARITY_SUSPICIOUS_THRESHOLD = exports.SIMILARITY_DUP_THRESHOLD = exports.AMOUNT_TOLERANCE_CENTS = exports.TS_TOLERANCE_SEC = exports.RULE = exports.SEVERITY = void 0;
 exports.SEVERITY = { HIGH: "high", MEDIUM: "medium", LOW: "low" };
 exports.RULE = {
     DUP_IN_BATCH__TXID: "DUP_IN_BATCH__TXID",
@@ -240,3 +240,39 @@ exports.DEFAULT_FIELD_MAPPING = {
         "browser_fingerprint",
     ],
 };
+exports.pdfMimeTypes = [
+    "application/pdf",
+    "application/x-pdf",
+    "application/acrobat",
+    "applications/vnd.pdf",
+    "text/pdf",
+    "text/x-pdf",
+];
+exports.csvMimeTypes = [
+    "text/csv",
+    "text/comma-separated-values",
+    "text/tab-separated-values",
+    "application/csv",
+    "application/excel",
+    "application/vnd.ms-excel",
+    "application/vnd.msexcel",
+];
+exports.excelMimeTypes = [
+    "application/vnd.ms-excel",
+    "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+    "application/vnd.ms-excel.sheet.macroenabled.12",
+    "application/vnd.ms-excel.sheet.binary.macroenabled.12",
+    "application/vnd.ms-excel.template.macroenabled.12",
+    "application/vnd.ms-excel.addin.macroenabled.12",
+    "application/excel",
+    "application/x-excel",
+    "application/x-msexcel",
+];
+exports.jsonMimeTypes = [
+    "application/json",
+    "application/x-json",
+    "text/json",
+    "text/x-json",
+    "application/jsonlines",
+    "application/x-ndjson",
+];

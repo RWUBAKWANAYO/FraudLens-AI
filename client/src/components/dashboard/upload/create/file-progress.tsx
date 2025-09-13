@@ -58,7 +58,7 @@ export default function FileProgress({ progress, stage, latestUpload }: Props) {
           {latestUpload.details?.threatsFound !== undefined && (
             <div className="w-full flex items-center justify-between gap-2 border-t border-accent-foreground p-2">
               <span className="text-sm font-semibold text-primary">Threats Found</span>
-              <span className="text-2xl font-black text-primary-red">
+              <span className="text-2xl font-bold text-primary-red">
                 {latestUpload.details?.threatsFound}
               </span>
             </div>

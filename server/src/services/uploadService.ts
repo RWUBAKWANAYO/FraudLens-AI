@@ -103,7 +103,6 @@ export async function getUploadsList(companyId: string, options: any = {}) {
   };
 
   where = QueryBuilder.buildWhere(where, filters, ["fileName", "fileType"], searchTerm);
-  console.log(startDate, endDate, "++++++++");
   where = QueryBuilder.buildDateRange(where, startDate, endDate, "createdAt");
 
   if (filters.createdAtMin || filters.createdAtMax) {

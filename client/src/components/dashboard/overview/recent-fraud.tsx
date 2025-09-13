@@ -10,54 +10,22 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { Button } from "@/components/ui/button";
-
-type FraudCase = {
-  id: string;
-  type: string;
-  severity: "low" | "medium" | "high" | "critical";
-  detectedAt: string;
-  source: string;
-};
-
-const fraudData: FraudCase[] = [
-  {
-    id: "FR-20230901",
-    type: "Phishing Attempt",
-    severity: "high",
-    detectedAt: "2025-09-01 14:22",
-    source: "Email Gateway",
-  },
-  {
-    id: "FR-20230902",
-    type: "Credential Stuffing",
-    severity: "critical",
-    detectedAt: "2025-09-02 09:11",
-    source: "Login API",
-  },
-  {
-    id: "FR-20230903",
-    type: "Suspicious File Upload",
-    severity: "medium",
-    detectedAt: "2025-09-02 17:40",
-    source: "Dashboard",
-  },
-  {
-    id: "FR-20230904",
-    type: "Malware Distribution",
-    severity: "high",
-    detectedAt: "2025-09-03 08:59",
-    source: "External Link",
-  },
-  {
-    id: "FR-20230905",
-    type: "SQL Injection",
-    severity: "critical",
-    detectedAt: "2025-09-03 12:33",
-    source: "Reports API",
-  },
-];
+import { useThreats } from "@/hooks/useThreats";
+import { StatusMessage } from "@/components/common/status-message";
+import { formatThreatType, getSeverity } from "@/lib/utils";
+import moment from "moment";
 
 export function RecentFraud() {
+  const {
+    data: threatsResponse,
+    isLoading,
+    error,
+  } = useThreats({
+    page: 1,
+    limit: 5,
+    sortOrder: "desc",
+  });
+  console.log("threatsResponse", threatsResponse);
   return (
     <div className="w-full bg-foreground rounded-lg p-6 h-full">
       <div className="flex items-center justify-between mb-4">
@@ -66,45 +34,60 @@ export function RecentFraud() {
           View All
         </Button>
       </div>
-      <div className="overflow-hidden rounded-md border border-accent">
-        <Table className="min-w-[700px]">
-          <TableHeader className="bg-tableHover">
-            <TableRow className="border-accent text-primary">
-              <TableHead className="py-4 text-primary font-bold">Case ID</TableHead>
-              <TableHead className="py-4 text-primary font-bold">Type</TableHead>
-              <TableHead className="py-4 text-primary font-bold">Severity</TableHead>
-              <TableHead className="py-4 text-primary font-bold">Detected At</TableHead>
-              <TableHead className="py-4 text-primary font-bold">Source</TableHead>
-            </TableRow>
-          </TableHeader>
-          <TableBody>
-            {fraudData.map((fraud) => (
-              <TableRow
-                key={fraud.id}
-                className="border-b border-accent font-normal hover:bg-tableHover transition-colors"
-              >
-                <TableCell className="py-4">{fraud.id}</TableCell>
-                <TableCell className="py-4">{fraud.type}</TableCell>
-                <TableCell
-                  className={`py-4 capitalize ${
-                    fraud.severity === "critical"
-                      ? "text-primary-blue"
-                      : fraud.severity === "high"
-                      ? "text-primary-red"
-                      : fraud.severity === "medium"
-                      ? "text-primary-green"
-                      : "text-green-600"
-                  }`}
-                >
-                  {fraud.severity}
-                </TableCell>
-                <TableCell className="py-4">{fraud.detectedAt}</TableCell>
-                <TableCell className="py-4">{fraud.source}</TableCell>
+      {(isLoading || error) && (
+        <StatusMessage
+          isLoading={isLoading}
+          error={error}
+          height={"calc(100% - 70px)"}
+          classNames="bg-foreground items-center"
+        />
+      )}
+      {threatsResponse?.data.length === 0 && (
+        <StatusMessage
+          info="No files uploaded yet"
+          height={"calc(100% - 70px)"}
+          classNames="bg-foreground items-center"
+        />
+      )}
+      {threatsResponse?.data?.length && threatsResponse?.data?.length > 0 && (
+        <div className="overflow-hidden rounded-md border border-accent">
+          <Table className="min-w-[700px]">
+            <TableHeader className="bg-tableHover">
+              <TableRow className="border-accent text-primary">
+                <TableHead className="py-4 text-primary font-bold">Transaction ID</TableHead>
+                <TableHead className="py-4 text-primary font-bold">Amount</TableHead>
+                <TableHead className="py-4 text-primary font-bold">Threat type</TableHead>
+                <TableHead className="py-4 text-primary font-bold">Severity</TableHead>
+                <TableHead className="py-4 text-primary font-bold">Uploaded</TableHead>
+                <TableHead className="py-4 text-primary font-bold">Detected At</TableHead>
               </TableRow>
-            ))}
-          </TableBody>
-        </Table>
-      </div>
+            </TableHeader>
+            <TableBody>
+              {threatsResponse?.data.map((fraud) => (
+                <TableRow
+                  key={fraud.id}
+                  className="border-b border-accent font-normal hover:bg-tableHover transition-colors"
+                >
+                  <TableCell className="py-4">{fraud.metadata?.aiContext?.txId}</TableCell>
+                  <TableCell className="py-4">{fraud.metadata?.aiContext?.amount}</TableCell>
+                  <TableCell className="py-4">
+                    {formatThreatType(fraud.metadata?.aiContext?.threatType || "")}
+                  </TableCell>
+                  <TableCell
+                    className={`py-4 capitalize ${getSeverity(fraud.confidenceScore).className}`}
+                  >
+                    {getSeverity(fraud.confidenceScore).severity}
+                  </TableCell>
+                  <TableCell className="py-4">{fraud.upload?.fileName}</TableCell>
+                  <TableCell className="py-4">
+                    {moment(fraud.createdAt).format("yyyy-MM-DD HH:mm")}
+                  </TableCell>
+                </TableRow>
+              ))}
+            </TableBody>
+          </Table>
+        </div>
+      )}
     </div>
   );
 }

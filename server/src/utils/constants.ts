@@ -248,3 +248,43 @@ export const DEFAULT_FIELD_MAPPING: FieldMappingConfig = {
     "browser_fingerprint",
   ],
 };
+
+export const pdfMimeTypes = [
+  "application/pdf",
+  "application/x-pdf",
+  "application/acrobat",
+  "applications/vnd.pdf",
+  "text/pdf",
+  "text/x-pdf",
+];
+
+export const csvMimeTypes = [
+  "text/csv",
+  "text/comma-separated-values",
+  "text/tab-separated-values",
+  "application/csv",
+  "application/excel",
+  "application/vnd.ms-excel",
+  "application/vnd.msexcel",
+];
+
+export const excelMimeTypes = [
+  "application/vnd.ms-excel",
+  "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+  "application/vnd.ms-excel.sheet.macroenabled.12",
+  "application/vnd.ms-excel.sheet.binary.macroenabled.12",
+  "application/vnd.ms-excel.template.macroenabled.12",
+  "application/vnd.ms-excel.addin.macroenabled.12",
+  "application/excel",
+  "application/x-excel",
+  "application/x-msexcel",
+];
+
+export const jsonMimeTypes = [
+  "application/json",
+  "application/x-json",
+  "text/json",
+  "text/x-json",
+  "application/jsonlines",
+  "application/x-ndjson",
+];

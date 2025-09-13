@@ -82,7 +82,6 @@ function getUploadsList(companyId_1) {
             OR: [{ fileSize: { gt: 1 } }, { fileName: { not: "direct-data-upload" } }],
         };
         where = queryBuilder_1.QueryBuilder.buildWhere(where, filters, ["fileName", "fileType"], searchTerm);
-        console.log(startDate, endDate, "++++++++");
         where = queryBuilder_1.QueryBuilder.buildDateRange(where, startDate, endDate, "createdAt");
         if (filters.createdAtMin || filters.createdAtMax) {
             where = queryBuilder_1.QueryBuilder.buildDateRange(where, filters.createdAtMin, filters.createdAtMax, "createdAt");

@@ -1,6 +1,7 @@
 import { User } from "@/types/user.interface";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { api, getAccessToken } from "@/lib/api";
+import { useToast } from "./use-toast";
 
 // GET ALL USERS
 export const useUsers = () => {
@@ -50,6 +51,7 @@ export const useRemoveUser = () => {
 // INVITE USER
 export const useInviteUser = () => {
   const queryClient = useQueryClient();
+  const { toast } = useToast();
 
   return useMutation({
     mutationFn: (data: { email: string; role: string }) =>
@@ -58,6 +60,17 @@ export const useInviteUser = () => {
           headers: { Authorization: `Bearer ${getAccessToken()}` },
         })
         .then((res) => res.data),
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: ["users"] }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["users"] });
+      toast({
+        title: "User Invited",
+        description: "User has been invited successfully",
+        style: {
+          background: "var(--foreground)",
+          color: "var(--primary-green)",
+          border: "1px solid var(--primary-green)",
+        },
+      });
+    },
   });
 };

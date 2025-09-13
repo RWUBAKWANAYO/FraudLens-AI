@@ -53,22 +53,22 @@ export function FileCard({ upload }: FileCardProps) {
 
       <div className="flex flex-col items-center text-center flex-grow">
         <div className="flex items-center justify-center">
-          {upload.fileType === "text/csv" && <Image src={csvFile} alt="csv" className="w-[70px]" />}
+          {upload.fileType === "text/csv" && <Image src={csvFile} alt="csv" className="w-[60px]" />}
           {(upload.fileType ===
             "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" ||
-            upload.fileType === "xlsx") && <Image src={xlsFile} alt="xls" className="w-[70px]" />}
+            upload.fileType === "xlsx") && <Image src={xlsFile} alt="xls" className="w-[60px]" />}
           {upload.fileType === "application/json" && (
-            <Image src={jsonFile} alt="json" className="w-[70px]" />
+            <Image src={jsonFile} alt="json" className="w-[60px]" />
           )}
           {upload.fileType === "application/pdf" && (
-            <Image src={pdfFile} alt="pdf" className="w-[70px]" />
+            <Image src={pdfFile} alt="pdf" className="w-[60px]" />
           )}
         </div>
 
-        <div className="my-4 space-y-4">
+        <div className="my-6 flex flex-col gap-2">
           <h3 className="font-bold text-sm text-primary truncate w-full">{upload.fileName}</h3>
 
-          <span className="text-sm font-medium text-colored-primary">
+          <span className="text-sm font-light text-primary">
             Record: {upload._count.records} , Threats: {upload._count.threats}
           </span>
         </div>
