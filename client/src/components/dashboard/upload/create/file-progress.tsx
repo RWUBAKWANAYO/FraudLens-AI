@@ -1,15 +1,17 @@
 "use client";
 
+import { UploadProgress } from "@/context/types";
 import { cn } from "@/lib/utils";
 
 type Props = {
   progress: number;
   stage: string | null;
+  latestUpload?: UploadProgress;
 };
 
-export default function FileProgress({ progress, stage }: Props) {
+export default function FileProgress({ progress, stage, latestUpload }: Props) {
   return (
-    <div className="w-full space-y-4 pt-2">
+    <div className="w-full space-y-4 p-4 border border-accent-foreground shadow-sm rounded-lg">
       <div className="w-full flex items-center gap-4">
         <div className="flex-1 h-8 p-1 border-2 border-colored-primary rounded-full overflow-hidden relative">
           <div
@@ -28,12 +30,41 @@ export default function FileProgress({ progress, stage }: Props) {
             />
           </div>
         </div>
-        <span className="font-semibold text-base">{progress}%</span>
+        <span className="font-bold text-base">{progress}%</span>
       </div>
-      <div className="flex items-center justify-center gap-2">
-        <span className="text-sm font-medium text-primary">Detected threat: {stage}</span>
-        <span className="text-lg font-bold text-primary-red">5</span>
-      </div>
+      {!latestUpload && stage === "initial" && (
+        <div className="w-full flex items-center justify-between gap-2 border-t border-accent-foreground p-2">
+          <span className="text-sm font-semibold text-primary">Initializing...</span>
+        </div>
+      )}
+      {latestUpload?.details && (
+        <div className="w-full flex flex-col">
+          {latestUpload.details?.recordsProcessed && (
+            <div className="w-full flex items-center justify-between gap-2 border-t border-accent-foreground p-2">
+              <span className="text-sm font-semibold text-primary">Records</span>
+              <span className="text-sm font-extrabold text-primary">
+                {latestUpload.details?.recordsProcessed}/{latestUpload.details?.totalRecords}
+              </span>
+            </div>
+          )}
+          {latestUpload.details?.currentBatch && (
+            <div className="w-full flex items-center justify-between gap-2 border-t border-accent-foreground p-2">
+              <span className="text-sm font-semibold text-primary">Batch</span>
+              <span className="text-sm font-extrabold text-primary">
+                {latestUpload.details?.currentBatch}/{latestUpload.details?.totalBatches}
+              </span>
+            </div>
+          )}
+          {latestUpload.details?.threatsFound !== undefined && (
+            <div className="w-full flex items-center justify-between gap-2 border-t border-accent-foreground p-2">
+              <span className="text-sm font-semibold text-primary">Threats Found</span>
+              <span className="text-2xl font-black text-primary-red">
+                {latestUpload.details?.threatsFound}
+              </span>
+            </div>
+          )}
+        </div>
+      )}
     </div>
   );
 }

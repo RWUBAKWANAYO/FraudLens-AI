@@ -32,21 +32,6 @@ export function FileCard({ upload }: FileCardProps) {
     }
   };
 
-  const getFileExtension = (fileName: string): string => {
-    return fileName.split(".").pop()?.toUpperCase() || "FILE";
-  };
-
-  const getFileIcon = (fileType: string) => {
-    const extension = getFileExtension(upload.fileName);
-    return (
-      <div className="flex items-center justify-center mb-3">
-        <div className="w-16 h-16 bg-gray-100 rounded-lg flex items-center justify-center border">
-          <span className="text-lg font-bold text-gray-600">{extension}</span>
-        </div>
-      </div>
-    );
-  };
-
   return (
     <div className="bg-foreground rounded-lg p-4 shadow border border-accent-foreground h-full flex flex-col">
       <div className="flex items-start justify-between mb-4">
@@ -68,15 +53,15 @@ export function FileCard({ upload }: FileCardProps) {
 
       <div className="flex flex-col items-center text-center flex-grow">
         <div className="flex items-center justify-center">
-          {upload.fileType === "text/csv" && <Image src={csvFile} alt="csv" className="w-20" />}
+          {upload.fileType === "text/csv" && <Image src={csvFile} alt="csv" className="w-[70px]" />}
           {(upload.fileType ===
             "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" ||
-            upload.fileType === "xlsx") && <Image src={xlsFile} alt="xls" className="w-20" />}
+            upload.fileType === "xlsx") && <Image src={xlsFile} alt="xls" className="w-[70px]" />}
           {upload.fileType === "application/json" && (
-            <Image src={jsonFile} alt="json" className="w-20" />
+            <Image src={jsonFile} alt="json" className="w-[70px]" />
           )}
           {upload.fileType === "application/pdf" && (
-            <Image src={pdfFile} alt="pdf" className="w-20" />
+            <Image src={pdfFile} alt="pdf" className="w-[70px]" />
           )}
         </div>
 

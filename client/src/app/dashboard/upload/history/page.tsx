@@ -33,7 +33,7 @@ export default function UploadHistory() {
 
   const [queryParams, setQueryParams] = useState<UploadQueryParams>({
     page: 1,
-    limit: 6,
+    limit: 10,
     sortBy: "createdAt",
     sortOrder: "desc",
   });
@@ -104,7 +104,7 @@ export default function UploadHistory() {
     setSearchTerm("");
     setQueryParams({
       page: 1,
-      limit: 6,
+      limit: 10,
       sortBy: "createdAt",
       sortOrder: "desc",
     });

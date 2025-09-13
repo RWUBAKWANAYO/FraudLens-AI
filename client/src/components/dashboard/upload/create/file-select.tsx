@@ -23,9 +23,16 @@ type Props = {
   onFileSelect: (file: File | null) => void;
   dragActive: boolean;
   setDragActive: (active: boolean) => void;
+  isFileAsynced: boolean;
 };
 
-export default function FileSelector({ file, onFileSelect, dragActive, setDragActive }: Props) {
+export default function FileSelector({
+  file,
+  onFileSelect,
+  dragActive,
+  setDragActive,
+  isFileAsynced,
+}: Props) {
   const inputRef = useRef<HTMLInputElement>(null);
 
   const handleDrag = (e: React.DragEvent) => {
@@ -136,7 +143,7 @@ export default function FileSelector({ file, onFileSelect, dragActive, setDragAc
         </div>
       </div>
 
-      {file && (
+      {file && !isFileAsynced && (
         <div className="space-y-2">
           <h3 className="text-sm font-semibold text-primary">Selected File:</h3>
           {getFilePreview(file)}

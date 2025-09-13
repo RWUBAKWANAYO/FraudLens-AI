@@ -47,7 +47,7 @@ export function Pagination({ currentPage, totalPages, onPageChange }: Pagination
   const pages = getVisiblePages();
 
   return (
-    <PaginationUI className="flex items-center justify-end">
+    <PaginationUI className="flex items-center justify-end pt-6">
       <PaginationContent className="flex flex-wrap justify-center gap-2">
         <PaginationItem>
           <PaginationPrevious

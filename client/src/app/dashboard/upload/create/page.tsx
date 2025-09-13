@@ -1,50 +1,103 @@
 "use client";
 
-import { useState } from "react";
+import { act, useEffect, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Upload } from "lucide-react";
 import FileSelector from "@/components/dashboard/upload/create/file-select";
 import FileProgress from "@/components/dashboard/upload/create/file-progress";
 import { RealTimeAlerts } from "@/components/dashboard/upload/create/realtime-alert";
+import { useRequireAuth } from "@/hooks/useRequireAuth";
+import { useToast } from "@/hooks/use-toast";
+import { api, getAccessToken } from "@/lib/api";
+import { UploadProvider, useUpload } from "@/context/UploadContext";
 
-const MOCK_STAGES = [
-  { label: "Uploading file...", progress: 20 },
-  { label: "Analyzing data...", progress: 50 },
-  { label: "Detecting fraud patterns...", progress: 80 },
-  { label: "Finalizing...", progress: 100 },
-];
-
-export default function FileUpload() {
+function FileUpload() {
   const [dragActive, setDragActive] = useState(false);
   const [file, setFile] = useState<File | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [isFileAsynced, setIsFileAsynced] = useState(false);
   const [progress, setProgress] = useState(0);
   const [stage, setStage] = useState<string | null>(null);
+  const { user } = useRequireAuth();
+  const { toast } = useToast();
+  const { activeUploads, clearAlerts } = useUpload();
+  const latestUpload = Array.from(activeUploads.values()).at(-1);
+
+  useEffect(() => {
+    if (latestUpload) {
+      if (latestUpload.stage === "complete") {
+        setIsFileAsynced(false);
+        setStage(null);
+        setProgress(0);
+        return;
+      }
+      setStage(latestUpload.stage);
+      setProgress(latestUpload.progress);
+    }
+  }, [latestUpload]);
 
   const handleSubmit = async () => {
     if (!file) return;
-
     setIsSubmitting(true);
-    setProgress(0);
-    setStage("Starting...");
-
-    let i = 0;
-    const interval = setInterval(() => {
-      if (i < MOCK_STAGES.length) {
-        setStage(MOCK_STAGES[i].label);
-        setProgress(MOCK_STAGES[i].progress);
-        i++;
-      } else {
-        clearInterval(interval);
-        setTimeout(() => {
-          alert(`Fraud analysis completed for ${file.name}!`);
-          setFile(null);
-          setIsSubmitting(false);
-          setProgress(0);
-          setStage(null);
-        }, 1000);
+    try {
+      if (!user?.company?.id) {
+        return toast({
+          title: "Error",
+          description: "Company you are uploading for does not exist",
+          style: {
+            background: "var(--foreground)",
+            color: "var(--primary-red)",
+            border: "1px solid var(--primary-red)",
+          },
+        });
       }
-    }, 3000);
+
+      const formData = new FormData();
+      formData.append("file", file);
+      formData.append("companyId", user.company.id);
+
+      const response = await api.post("/audit/upload", formData, {
+        headers: {
+          "Content-Type": "multipart/form-data",
+          Authorization: `Bearer ${getAccessToken()}`,
+        },
+      });
+
+      if (response.data?.reuploadOf) {
+        toast({
+          title: "File already uploaded",
+          description: `The file you are trying to upload is already uploaded for <${response.data.reuploadOf}>`,
+          style: {
+            background: "var(--foreground)",
+            color: "var(--primary-red)",
+            border: "1px solid var(--primary-red)",
+          },
+        });
+      } else {
+        setProgress(0);
+        setStage("initial");
+        setIsFileAsynced(true);
+      }
+    } catch (error: any) {
+      console.error("Upload failed:", error);
+      toast({
+        title: "Error",
+        description: error?.message || "Something went wrong",
+        style: {
+          background: "var(--foreground)",
+          color: "var(--primary-red)",
+          border: "1px solid var(--primary-red)",
+        },
+      });
+      return null;
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
+  const onFileSelectHandler = (file: File | null) => {
+    clearAlerts();
+    setFile(file);
   };
 
   return (
@@ -57,9 +110,10 @@ export default function FileUpload() {
 
         <FileSelector
           file={file}
-          onFileSelect={setFile}
+          onFileSelect={onFileSelectHandler}
           dragActive={dragActive}
           setDragActive={setDragActive}
+          isFileAsynced={isFileAsynced}
         />
 
         <Button
@@ -71,7 +125,7 @@ export default function FileUpload() {
           {isSubmitting ? (
             <>
               <Upload className="w-6 h-6 mr-2 animate-bounce" />
-              Processing...
+              Uploading...
             </>
           ) : (
             <>
@@ -81,12 +135,22 @@ export default function FileUpload() {
           )}
         </Button>
 
-        {isSubmitting && <FileProgress progress={progress} stage={stage} />}
+        {isFileAsynced && (
+          <FileProgress progress={progress} stage={stage} latestUpload={latestUpload} />
+        )}
       </div>
-      <div className="w-full space-y-4 bg-foreground rounded-lg p-4 sm:p-6 flex-1">
-        <h2 className="text-lg font-bold">Real Time Alerts</h2>
+      <div className="bg-foreground rounded-lg p-4 sm:p-6 flex-1">
+        <h2 className="text-lg font-bold mb-4 px-2">Real Time Alerts</h2>
         <RealTimeAlerts />
       </div>
     </div>
+  );
+}
+
+export default function UploadPage() {
+  return (
+    <UploadProvider>
+      <FileUpload />
+    </UploadProvider>
   );
 }

@@ -32,9 +32,7 @@ export class SocketService {
         if (!isHealthy) {
           await this.reconnectRedis();
         }
-      } catch (error) {
-        // Silent fail for health checks in production
-      }
+      } catch (error) {}
     }, this.HEALTH_CHECK_INTERVAL);
   }
 
@@ -95,9 +93,7 @@ export class SocketService {
         ...event,
         timestamp: _metadata?.publishedAt || new Date().toISOString(),
       });
-    } catch (error) {
-      // Malformed messages are silently ignored in production
-    }
+    } catch (error) {}
   }
 
   private handleThreatMessage(message: string): void {
@@ -113,9 +109,7 @@ export class SocketService {
         ...event,
         timestamp: _metadata?.publishedAt || new Date().toISOString(),
       });
-    } catch (error) {
-      // Malformed messages are silently ignored in production
-    }
+    } catch (error) {}
   }
 
   private emitToCompany(event: string, companyId: string, data: any): void {

@@ -1,69 +1,89 @@
+"use client";
+
+import { Badge } from "@/components/ui/badge";
+import moment from "moment";
 import React from "react";
+import { useUpload } from "@/context/UploadContext";
+import { StatusMessage } from "@/components/common/status-message";
 
 export const RealTimeAlerts = () => {
-  const alerts = [
-    {
-      id: "TX1014",
-      title: "Duplicate transaction",
-      description: "Transaction ID TX1014 matches 11 previous records. Cluster value: USD 200.00.",
-    },
-    {
-      id: "TX2021",
-      title: "High-value anomaly",
-      description:
-        "Transaction ID TX2021 flagged for exceeding normal limits. Amount: USD 15,000.00.",
-    },
-    {
-      id: "TX3098",
-      title: "Suspicious location",
-      description:
-        "Transaction ID TX3098 originated from Lagos, Nigeria. Previous activity location: Paris, France.",
-    },
-    {
-      id: "TX4102",
-      title: "Velocity alert",
-      description:
-        "Transaction ID TX4102 is the 5th attempt within 2 minutes. Total attempted value: USD 1,200.00.",
-    },
-    {
-      id: "TX5187",
-      title: "Blacklisted account",
-      description:
-        "Transaction ID TX5187 involves a sender flagged in watchlist. Amount: USD 750.00.",
-    },
-    {
-      id: "TX6244",
-      title: "Multiple card usage",
-      description:
-        "Transaction ID TX6244 uses card linked to 3 different user accounts within 24 hours.",
-    },
-    {
-      id: "TX7350",
-      title: "Geographic mismatch",
-      description:
-        "Transaction ID TX7350 attempted in London while user’s device shows New York activity.",
-    },
-    {
-      id: "TX8422",
-      title: "Unusual merchant",
-      description: "Transaction ID TX8422 processed at unregistered merchant. Amount: USD 420.00.",
-    },
-  ];
+  const { alerts, completedUploads } = useUpload();
+
+  const latestCompleted = Array.from(completedUploads.values()).sort(
+    (a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime()
+  )[0];
 
   return (
-    <div
-      className="grid grid-cols-1 xl:grid-cols-2 gap-3"
-      style={{ maxHeight: "calc(100vh - 220px)", overflowY: "auto" }}
-    >
-      {alerts.map((alert, i) => (
-        <div
-          key={i}
-          className="p-4 space-y-2 border border-accent-foreground border-s-[6px] border-s-colored-primary  rounded-[4px] shadow"
-        >
-          <h2 className="text-base font-bold text-primary">{alert.title}</h2>
-          <p className="text-sm text-primary-foreground">{alert.description}</p>
+    <div className="px-2 space-y-6">
+      {latestCompleted && (
+        <div className="p-5 bg-tableHover rounded-lg border border-accent-foreground shadow-sm">
+          <h2 className="text-base font-semibold text-primary mb-3">Upload Analysis Complete</h2>
+          <p className="text-sm text-primary-foreground mb-4">
+            Found{" "}
+            <span className="font-semibold text-primary">{latestCompleted.threats.length}</span>{" "}
+            threats in{" "}
+            <span className="font-semibold text-primary">
+              {latestCompleted.summary.recordsAnalyzed}
+            </span>{" "}
+            records.
+          </p>
+          <div className="flex flex-wrap gap-4 text-sm text-primary-foreground border-t border-accent-foreground pt-3">
+            <div>
+              <span className="font-medium">Upload ID: </span>
+              {latestCompleted.uploadId.substring(0, 8)}...
+            </div>
+            <div>
+              <span className="font-medium">Time: </span>
+              {moment(latestCompleted.timestamp).format("YYYY-MM-DD HH:mm")}
+            </div>
+          </div>
         </div>
-      ))}
+      )}
+      {alerts.length === 0 ? (
+        <StatusMessage info="No alerts found" height={"calc(100vh - 400px)"} />
+      ) : (
+        <div
+          className="grid grid-cols-1 2xl:grid-cols-2 gap-4 overflow-y-auto"
+          style={{ maxHeight: "calc(100vh - 400px)" }}
+        >
+          {alerts.map((alert) => (
+            <div
+              key={alert.id}
+              className="p-5 shadow-sm bg-foreground rounded-lg border border-accent-foreground hover:border-colored-primary cursor-pointer"
+            >
+              <div className="flex justify-between items-start mb-3">
+                <h2 className="text-base font-semibold text-primary">{alert.title}</h2>
+                {alert.severity && (
+                  <Badge className="text-colored-primary bg-colored-shadow border border-colored-primary px-2 py-1 shadow-none capitalize">
+                    {alert.severity}
+                  </Badge>
+                )}
+              </div>
+
+              <p className="text-sm text-primary-foreground mb-4">{alert.description}</p>
+
+              <div className="flex flex-wrap gap-4 text-sm text-primary-foreground border-t border-accent-foreground pt-4">
+                <div>
+                  <span className="font-medium">Time: </span>
+                  {moment(alert.createdAt).format("YYYY-MM-DD HH:mm")}
+                </div>
+                {alert.id && (
+                  <div>
+                    <span className="font-medium">Alert ID: </span>
+                    {alert.id.substring(0, 8)}...
+                  </div>
+                )}
+                {alert.threatId && (
+                  <div>
+                    <span className="font-medium">Threat ID: </span>
+                    {alert.threatId.substring(0, 8)}...
+                  </div>
+                )}
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
     </div>
   );
 };

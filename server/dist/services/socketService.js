@@ -39,9 +39,7 @@ class SocketService {
                     yield this.reconnectRedis();
                 }
             }
-            catch (error) {
-                // Silent fail for health checks in production
-            }
+            catch (error) { }
         }), this.HEALTH_CHECK_INTERVAL);
     }
     stopHealthChecks() {
@@ -94,9 +92,7 @@ class SocketService {
             }
             this.emitToCompany("alert", companyId, Object.assign(Object.assign({}, event), { timestamp: (_metadata === null || _metadata === void 0 ? void 0 : _metadata.publishedAt) || new Date().toISOString() }));
         }
-        catch (error) {
-            // Malformed messages are silently ignored in production
-        }
+        catch (error) { }
     }
     handleThreatMessage(message) {
         try {
@@ -107,9 +103,7 @@ class SocketService {
             }
             this.emitToCompany("threat_update", companyId, Object.assign(Object.assign({}, event), { timestamp: (_metadata === null || _metadata === void 0 ? void 0 : _metadata.publishedAt) || new Date().toISOString() }));
         }
-        catch (error) {
-            // Malformed messages are silently ignored in production
-        }
+        catch (error) { }
     }
     emitToCompany(event, companyId, data) {
         if (!this.io) {
