@@ -1,6 +1,7 @@
 import { v2 as cloudinary } from "cloudinary";
 import fetch from "node-fetch";
 import { v4 as uuidv4 } from "uuid";
+import crypto from "crypto";
 
 interface ICloudinaryResponse {
   secure_url: string;
