@@ -18,19 +18,17 @@ const options = {
 };
 const swaggerSpec = (0, swagger_jsdoc_1.default)(options);
 const setupSwagger = (app) => {
-    if (process.env.NODE_ENV !== "production") {
-        app.use("/api-docs", swagger_ui_express_1.default.serve, swagger_ui_express_1.default.setup(swaggerSpec, {
-            explorer: true,
-            customCss: ".swagger-ui .topbar { display: none }",
-            customSiteTitle: "API Documentation",
-            swaggerOptions: {
-                persistAuthorization: true,
-                displayRequestDuration: true,
-                tryItOutEnabled: true,
-            },
-        }));
-        console.log("📚 OpenAPI documentation available at /api-docs");
-    }
+    app.use("/api-docs", swagger_ui_express_1.default.serve, swagger_ui_express_1.default.setup(swaggerSpec, {
+        explorer: true,
+        customCss: ".swagger-ui .topbar { display: none }",
+        customSiteTitle: "API Documentation",
+        swaggerOptions: {
+            persistAuthorization: true,
+            displayRequestDuration: true,
+            tryItOutEnabled: true,
+        },
+    }));
+    console.log("📚 OpenAPI documentation available at /api-docs");
 };
 exports.setupSwagger = setupSwagger;
 const getSwaggerSpec = () => swaggerSpec;

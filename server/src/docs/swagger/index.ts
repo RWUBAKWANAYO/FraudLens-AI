@@ -26,24 +26,22 @@ const options = {
 const swaggerSpec = swaggerJSDoc(options);
 
 export const setupSwagger = (app: Express): void => {
-  if (process.env.NODE_ENV !== "production") {
-    app.use(
-      "/api-docs",
-      swaggerUi.serve,
-      swaggerUi.setup(swaggerSpec, {
-        explorer: true,
-        customCss: ".swagger-ui .topbar { display: none }",
-        customSiteTitle: "API Documentation",
-        swaggerOptions: {
-          persistAuthorization: true,
-          displayRequestDuration: true,
-          tryItOutEnabled: true,
-        },
-      })
-    );
+  app.use(
+    "/api-docs",
+    swaggerUi.serve,
+    swaggerUi.setup(swaggerSpec, {
+      explorer: true,
+      customCss: ".swagger-ui .topbar { display: none }",
+      customSiteTitle: "API Documentation",
+      swaggerOptions: {
+        persistAuthorization: true,
+        displayRequestDuration: true,
+        tryItOutEnabled: true,
+      },
+    })
+  );
 
-    console.log("📚 OpenAPI documentation available at /api-docs");
-  }
+  console.log("📚 OpenAPI documentation available at /api-docs");
 };
 
 export const getSwaggerSpec = () => swaggerSpec;
