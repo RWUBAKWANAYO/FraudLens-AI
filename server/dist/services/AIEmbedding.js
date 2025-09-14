@@ -18,7 +18,7 @@ const openai_1 = __importDefault(require("openai"));
 const node_fetch_1 = __importDefault(require("node-fetch"));
 const client = new openai_1.default({ apiKey: process.env.OPENAI_API_KEY });
 const USE_LOCAL_AI = process.env.USE_LOCAL_AI === "true";
-const LOCAL_AI_URL = process.env.LOCAL_AI_URL;
+const LOCAL_AI_URL = process.env.LOCAL_AI_URL || "http://localhost:5001";
 function pPool(items, limit, fn) {
     return __awaiter(this, void 0, void 0, function* () {
         const ret = new Array(items.length);
