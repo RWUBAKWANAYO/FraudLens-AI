@@ -44,16 +44,21 @@ async function establishConnection(): Promise<amqp.Connection> {
     const url = process.env.RABBIT_URL;
     if (!url) throw new Error("RABBIT_URL is not set");
 
-    const conn = await amqp.connect(url);
+    const heartbeatSec = Number(process.env.RABBIT_HEARTBEAT || 30);
+    const conn = await amqp.connect(url, { heartbeat: heartbeatSec });
 
     conn.on("error", (err) => {
-      console.error("RabbitMQ connection error:", err && (err as Error).message);
+      try {
+        console.error("RabbitMQ connection error:", err && (err as Error).message);
+      } catch (e) {}
       connectionState = "disconnected";
       scheduleReconnect();
     });
 
-    conn.on("close", () => {
-      console.warn("RabbitMQ connection closed");
+    conn.on("close", (err?) => {
+      try {
+        console.warn("RabbitMQ connection closed", err ? err.message : "");
+      } catch (e) {}
       connectionState = "disconnected";
       scheduleReconnect();
     });
@@ -93,10 +98,6 @@ function scheduleReconnect() {
   setTimeout(() => establishConnection().catch(console.error), delay);
 }
 
-/**
- * Return a publisher channel (single long-lived channel used for publishing).
- * If channel is closed, a new one is created.
- */
 export async function getChannel(): Promise<amqp.Channel> {
   try {
     if (publisherChannel && publisherChannel.connection) {
@@ -178,9 +179,6 @@ export async function checkConnectionHealth(): Promise<boolean> {
   }
 }
 
-/**
- * Close channels and connection gracefully.
- */
 export async function closeConnections(): Promise<void> {
   isShuttingDown = true;
   await Promise.allSettled(
@@ -219,9 +217,6 @@ export async function closeConnections(): Promise<void> {
   isConnecting = false;
 }
 
-/**
- * Graceful shutdown helper for process signals
- */
 export async function gracefulShutdown(): Promise<void> {
   console.log("Performing graceful RabbitMQ shutdown...");
   isShuttingDown = true;

@@ -25,7 +25,7 @@ export function RecentFraud() {
     limit: 5,
     sortOrder: "desc",
   });
-  console.log("threatsResponse", threatsResponse);
+
   return (
     <div className="w-full bg-foreground rounded-lg p-6 h-full">
       <div className="flex items-center justify-between mb-4">

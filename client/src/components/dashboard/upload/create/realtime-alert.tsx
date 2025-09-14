@@ -14,7 +14,7 @@ export const RealTimeAlerts = () => {
   )[0];
 
   return (
-    <div className="px-2 space-y-6">
+    <div className="px-2 space-y-6 flex flex-col" style={{ maxHeight: "calc(100vh - 220px)" }}>
       {latestCompleted && (
         <div className="p-5 bg-tableHover rounded-lg border border-accent-foreground shadow-sm">
           <h2 className="text-base font-semibold text-primary mb-3">Upload Analysis Complete</h2>
@@ -40,12 +40,13 @@ export const RealTimeAlerts = () => {
         </div>
       )}
       {alerts.length === 0 ? (
-        <StatusMessage info="No alerts found" height={"calc(100vh - 400px)"} />
+        <StatusMessage
+          info="No alerts found"
+          height={"calc(100vh - 220px)"}
+          classNames="items-center"
+        />
       ) : (
-        <div
-          className="grid grid-cols-1 2xl:grid-cols-2 gap-4 overflow-y-auto"
-          style={{ maxHeight: "calc(100vh - 400px)" }}
-        >
+        <div className="grid grid-cols-1 2xl:grid-cols-2 gap-4 overflow-y-auto flex-grow">
           {alerts.map((alert) => (
             <div
               key={alert.id}

@@ -253,7 +253,7 @@ model WebhookDelivery {
   payload      Json
   success      Boolean
   attempt      Int
-  error        String?
+  error        String?             @db.LongText
   responseTime Int?
   environment  String?
   createdAt    DateTime            @default(now())

@@ -120,17 +120,18 @@ export default function FileSelector({
         />
 
         <div className="space-y-4">
-          <div className="mx-auto w-[70px] xl:w-[100px] h-[70px] xl:h-[100px]">
+          <div className="mx-auto w-[70px] xl:w-[90px] h-[70px] xl:h-[90px]">
             <Image src={claudUpload} alt="cloud-upload" className="w-full h-full" />
           </div>
 
           <div>
-            <p className="text-lg font-bold text-primary">Drop file here</p>
-            <p className="text-base font-bold text-primary-foreground mt-1">OR</p>
+            <p className="text-base font-bold text-primary">Drop file here</p>
+            <p className="text-sm font-bold text-primary-foreground mt-1">OR</p>
           </div>
 
           <Button
             type="button"
+            size={"sm"}
             onClick={() => inputRef.current?.click()}
             className="bg-colored-primary colored-button text-white"
           >

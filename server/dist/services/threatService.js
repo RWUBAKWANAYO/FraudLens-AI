@@ -88,9 +88,7 @@ class ThreatService {
                     metadata: Object.assign(Object.assign({}, metadata), { aiExplanation: detailedExplanation, aiGeneratedAt: new Date().toISOString(), aiExplanationGenerated: true }),
                 },
             });
-            return {
-                threat: Object.assign(Object.assign({}, threat), { metadata: Object.assign(Object.assign({}, metadata), { aiExplanation: detailedExplanation, aiGeneratedAt: new Date().toISOString(), aiExplanationGenerated: true }) }),
-            };
+            return Object.assign(Object.assign({}, threat), { metadata: Object.assign(Object.assign({}, metadata), { aiExplanation: detailedExplanation, aiGeneratedAt: new Date().toISOString(), aiExplanationGenerated: true }) });
         });
     }
     static updateThreatMetadata(threatId, metadata) {

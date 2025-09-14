@@ -73,6 +73,12 @@ function FileUpload() {
             setIsFileAsynced(true);
           }
         },
+        onError: (_error) => {
+          setProgress(0);
+          setStage(null);
+          setIsFileAsynced(false);
+          clearAlerts();
+        },
       }
     );
   };
@@ -102,7 +108,7 @@ function FileUpload() {
           onClick={handleSubmit}
           disabled={!file || uploadMutation.isPending}
           size="lg"
-          className="w-full h-12 bg-colored-primary colored-button text-white font-bold disabled:cursor-not-allowed"
+          className="w-full bg-colored-primary colored-button text-white font-bold disabled:cursor-not-allowed"
         >
           {uploadMutation.isPending ? (
             <>

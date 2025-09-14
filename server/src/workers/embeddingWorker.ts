@@ -1,3 +1,4 @@
+import "./globalProcessHandlers";
 import { consume } from "../queue/bus";
 import { prisma } from "../config/db";
 import { getEmbeddingsBatch } from "../services/aiEmbedding";

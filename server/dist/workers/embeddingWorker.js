@@ -10,6 +10,7 @@ var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, P, ge
 };
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.startEmbeddingWorker = startEmbeddingWorker;
+require("./globalProcessHandlers");
 const bus_1 = require("../queue/bus");
 const db_1 = require("../config/db");
 const aiEmbedding_1 = require("../services/aiEmbedding");

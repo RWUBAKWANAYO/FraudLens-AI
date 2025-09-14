@@ -5,7 +5,33 @@ let redisClient: RedisClientType | null = null;
 let pubClient: RedisClientType | null = null;
 let subClient: RedisClientType | null = null;
 let isReconnecting = false;
-const MAX_RECONNECT_ATTEMPTS = 10;
+const MAX_RECONNECT_ATTEMPTS = Number(process.env.REDIS_MAX_RECONNECT || 10);
+
+function attachCommonHandlers(client: RedisClientType, name: string) {
+  client.on("error", (err) => {
+    try {
+      console.error(`[redis:${name}] error`, err && err.message ? err.message : err);
+    } catch (e) {
+      console.error(`[redis:${name}] error handler failed`, e);
+    }
+  });
+
+  client.on("connect", () => {
+    console.info(`[redis:${name}] connect`);
+  });
+
+  client.on("ready", () => {
+    console.info(`[redis:${name}] ready`);
+  });
+
+  client.on("end", () => {
+    console.warn(`[redis:${name}] connection ended`);
+  });
+
+  client.on("reconnecting", (delay) => {
+    console.warn(`[redis:${name}] reconnecting in ${delay}ms`);
+  });
+}
 
 export async function getRedis() {
   if (redisClient && redisClient.isOpen) return redisClient;
@@ -17,18 +43,24 @@ export async function getRedis() {
     redisClient = createClient({
       url,
       socket: {
-        reconnectStrategy: (retries) => {
-          if (retries > MAX_RECONNECT_ATTEMPTS) {
-            return false;
-          }
+        reconnectStrategy: (retries: number) => {
+          if (retries >= MAX_RECONNECT_ATTEMPTS) return false;
           return Math.min(retries * 1000, 5000);
         },
       },
     }) as RedisClientType;
 
+    attachCommonHandlers(redisClient, "client");
+
     await redisClient.connect();
     return redisClient;
   } catch (error) {
+    try {
+      if (redisClient) {
+        await redisClient.disconnect().catch(() => {});
+      }
+    } catch {}
+    redisClient = null;
     throw error;
   }
 }
@@ -42,7 +74,7 @@ export async function getRedisPubSub() {
   if (!url) throw new Error("REDIS_URL is required");
 
   if (isReconnecting) {
-    await new Promise((resolve) => setTimeout(resolve, 1000));
+    await new Promise((resolve) => setTimeout(resolve, 500));
     if (pubClient && subClient && pubClient.isOpen && subClient.isOpen) {
       return { pubClient, subClient };
     }
@@ -56,8 +88,8 @@ export async function getRedisPubSub() {
     pubClient = createClient({
       url,
       socket: {
-        reconnectStrategy: (retries) => {
-          if (retries > MAX_RECONNECT_ATTEMPTS) return false;
+        reconnectStrategy: (retries: number) => {
+          if (retries >= MAX_RECONNECT_ATTEMPTS) return false;
           return Math.min(retries * 1000, 5000);
         },
       },
@@ -66,12 +98,15 @@ export async function getRedisPubSub() {
     subClient = createClient({
       url,
       socket: {
-        reconnectStrategy: (retries) => {
-          if (retries > MAX_RECONNECT_ATTEMPTS) return false;
+        reconnectStrategy: (retries: number) => {
+          if (retries >= MAX_RECONNECT_ATTEMPTS) return false;
           return Math.min(retries * 1000, 5000);
         },
       },
     }) as RedisClientType;
+
+    attachCommonHandlers(pubClient, "pub");
+    attachCommonHandlers(subClient, "sub");
 
     await Promise.all([pubClient.connect(), subClient.connect()]);
 
@@ -79,19 +114,24 @@ export async function getRedisPubSub() {
     return { pubClient, subClient };
   } catch (error) {
     isReconnecting = false;
+    await closeRedisPubSubConnections();
     throw error;
   }
 }
 
 async function closeRedisPubSubConnections() {
-  const clients = [pubClient, subClient].filter(Boolean);
+  const clients = [pubClient, subClient].filter(Boolean) as RedisClientType[];
   await Promise.allSettled(
     clients.map(async (client) => {
       try {
-        if (client && client.isOpen) {
+        if (client.isOpen) {
           await client.quit();
         }
-      } catch (error) {}
+      } catch (err) {
+        try {
+          await client.disconnect();
+        } catch {}
+      }
     })
   );
   pubClient = null;
@@ -99,14 +139,18 @@ async function closeRedisPubSubConnections() {
 }
 
 export async function closeRedisConnections() {
-  const clients = [redisClient, pubClient, subClient].filter(Boolean);
+  const clients = [redisClient, pubClient, subClient].filter(Boolean) as RedisClientType[];
   await Promise.allSettled(
     clients.map(async (client) => {
       try {
-        if (client && client.isOpen) {
+        if (client.isOpen) {
           await client.quit();
         }
-      } catch (error) {}
+      } catch (error) {
+        try {
+          await client.disconnect();
+        } catch {}
+      }
     })
   );
   redisClient = null;
@@ -117,8 +161,8 @@ export async function closeRedisConnections() {
 export async function checkRedisHealth(): Promise<boolean> {
   try {
     const client = await getRedis();
-    await client.ping();
-    return true;
+    const res = await client.ping();
+    return res === "PONG" || res === "OK";
   } catch {
     return false;
   }

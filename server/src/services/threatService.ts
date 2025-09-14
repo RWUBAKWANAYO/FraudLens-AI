@@ -106,14 +106,12 @@ export class ThreatService {
     });
 
     return {
-      threat: {
-        ...threat,
-        metadata: {
-          ...metadata,
-          aiExplanation: detailedExplanation,
-          aiGeneratedAt: new Date().toISOString(),
-          aiExplanationGenerated: true,
-        },
+      ...threat,
+      metadata: {
+        ...metadata,
+        aiExplanation: detailedExplanation,
+        aiGeneratedAt: new Date().toISOString(),
+        aiExplanationGenerated: true,
       },
     };
   }

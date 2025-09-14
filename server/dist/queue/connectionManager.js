@@ -87,14 +87,21 @@ function establishConnection() {
             const url = process.env.RABBIT_URL;
             if (!url)
                 throw new Error("RABBIT_URL is not set");
-            const conn = yield amqp.connect(url);
+            const heartbeatSec = Number(process.env.RABBIT_HEARTBEAT || 30);
+            const conn = yield amqp.connect(url, { heartbeat: heartbeatSec });
             conn.on("error", (err) => {
-                console.error("RabbitMQ connection error:", err && err.message);
+                try {
+                    console.error("RabbitMQ connection error:", err && err.message);
+                }
+                catch (e) { }
                 connectionState = "disconnected";
                 scheduleReconnect();
             });
-            conn.on("close", () => {
-                console.warn("RabbitMQ connection closed");
+            conn.on("close", (err) => {
+                try {
+                    console.warn("RabbitMQ connection closed", err ? err.message : "");
+                }
+                catch (e) { }
                 connectionState = "disconnected";
                 scheduleReconnect();
             });
@@ -131,10 +138,6 @@ function scheduleReconnect() {
     console.log(`Scheduling reconnection attempt ${reconnectAttempts} in ${delay}ms`);
     setTimeout(() => establishConnection().catch(console.error), delay);
 }
-/**
- * Return a publisher channel (single long-lived channel used for publishing).
- * If channel is closed, a new one is created.
- */
 function getChannel() {
     return __awaiter(this, void 0, void 0, function* () {
         try {
@@ -212,9 +215,6 @@ function checkConnectionHealth() {
         }
     });
 }
-/**
- * Close channels and connection gracefully.
- */
 function closeConnections() {
     return __awaiter(this, void 0, void 0, function* () {
         isShuttingDown = true;
@@ -251,9 +251,6 @@ function closeConnections() {
         isConnecting = false;
     });
 }
-/**
- * Graceful shutdown helper for process signals
- */
 function gracefulShutdown() {
     return __awaiter(this, void 0, void 0, function* () {
         console.log("Performing graceful RabbitMQ shutdown...");

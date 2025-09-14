@@ -21,11 +21,17 @@ export default function RegisterPage() {
     register: registerField,
     handleSubmit,
     formState: { errors },
+    reset,
   } = useForm<RegisterFormData>({
     resolver: zodResolver(registerSchema),
   });
 
-  const onSubmit = (data: RegisterFormData) => register(data);
+  const onSubmit = (data: RegisterFormData) =>
+    register(data, {
+      onSuccess: () => {
+        reset();
+      },
+    });
 
   return (
     <div className="min-h-screen bg-background flex items-center justify-center p-4">
