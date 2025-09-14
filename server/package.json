@@ -11,7 +11,6 @@
     "prebuild": "tslint -c tslint.json -p tsconfig.json --fix",
     "build": "tsc",
     "watch": "tsc -w",
-    "prestart": "npm run build",
     "dev": "export NODE_ENV=development && concurrently --kill-others \"npm run watch\" \"nodemon dist/server.js\"",
     "start": "NODE_ENV=production node dist/server.js"
   },
