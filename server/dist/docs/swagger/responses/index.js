@@ -1,0 +1,11 @@
+"use strict";
+Object.defineProperty(exports, "__esModule", { value: true });
+exports.allResponses = void 0;
+const common_1 = require("./common");
+const auth_1 = require("./auth");
+const apiKey_1 = require("./apiKey");
+const user_1 = require("./user");
+const webhook_1 = require("./webhook");
+const audit_1 = require("./audit");
+const stats_1 = require("./stats");
+exports.allResponses = Object.assign(Object.assign(Object.assign(Object.assign(Object.assign(Object.assign(Object.assign({}, common_1.commonResponses), auth_1.authResponses), apiKey_1.apiKeyResponses), user_1.userResponses), webhook_1.webhookResponses), audit_1.auditResponses), stats_1.statsResponses);

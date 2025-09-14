@@ -3,76 +3,280 @@ generator client {
 }
 
 datasource db {
-  provider = "mysql"
-  url      = env("DATABASE_URL")
+  provider     = "mysql"
+  url          = env("DATABASE_URL")
+  relationMode = "prisma"
 }
 
-model Employee {
-  id             String           @id @default(uuid())
-  name           String
-  email          String           @unique
-  role           String
-  department     String
-  lastActive     DateTime?
-  riskScore      Float            @default(0)
-  communications Communications[]
-  financialLogs  FinancialLog[]
-  threats        Threat[]
-  createdAt      DateTime         @default(now())
-  updatedAt      DateTime         @updatedAt
+model Company {
+  id          String                @id @default(uuid())
+  name        String
+  slug        String                @unique
+  createdAt   DateTime              @default(now())
+  updatedAt   DateTime              @updatedAt
+  alerts      Alert[]
+  records     Record[]
+  rules       Rule[]
+  threats     Threat[]
+  uploads     Upload[]
+  webhooks    WebhookSubscription[]
+  users       User[]
+  invitations Invitation[]
+  apiKeys     ApiKey[]
+
+  @@index([slug])
 }
 
-model Communications {
-  id         String   @id @default(uuid())
-  employeeId String
-  channel    String
-  content    String
-  timestamp  DateTime
+model User {
+  id                String       @id @default(uuid())
+  email             String       @unique
+  password          String
+  fullName          String
+  companyId         String
+  avatarUrl         String?      @db.VarChar(512)
+  avatarPublicId    String?      @db.VarChar(512)
+  role              UserRole     @default(MEMBER)
+  isVerified        Boolean      @default(false)
+  verificationToken String?      @db.VarChar(512)
+  resetToken        String?      @db.VarChar(512)
+  resetTokenExpiry  DateTime?
+  refreshToken      String?      @db.VarChar(512)
+  lastLogin         DateTime?
+  createdAt         DateTime     @default(now())
+  updatedAt         DateTime     @updatedAt
+  company           Company      @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  invitedBy         User?        @relation("UserInvitations", fields: [invitedById], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  invitedById       String?
+  invitedUsers      User[]       @relation("UserInvitations")
+  sentInvitations   Invitation[]
+  createdApiKeys    ApiKey[]
 
+  @@index([companyId, email])
+  @@index([verificationToken])
+  @@index([resetToken])
+  @@index([refreshToken])
+  @@index([invitedById])
+}
+
+enum UserRole {
+  ADMIN
+  MANAGER
+  ANALYST
+  MEMBER
+  API_CLIENT
+}
+
+model Invitation {
+  id          String   @id @default(uuid())
+  email       String
+  companyId   String
+  invitedById String
+  role        UserRole
+  token       String   @unique
+  expiresAt   DateTime
+  accepted    Boolean  @default(false)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  company     Company  @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  invitedBy   User     @relation(fields: [invitedById], references: [id], onDelete: Cascade)
+
+  @@index([companyId, email])
+  @@index([token])
+  @@index([expiresAt])
+  @@index([invitedById])
+}
+
+model ApiKey {
+  id         String    @id @default(uuid())
+  companyId  String
+  name       String
+  key        String    @unique
+  secret     String
+  enabled    Boolean   @default(true)
+  createdAt  DateTime  @default(now())
+  expiresAt  DateTime?
+  lastUsedAt DateTime?
+  createdBy  String
+
+  company Company @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  user    User?   @relation(fields: [createdBy], references: [id], onDelete: NoAction)
+
+  @@index([companyId])
+  @@index([key])
+  @@index([expiresAt])
+  @@index([enabled])
+  @@index([createdBy])
+}
+
+model Upload {
+  id          String    @id @default(uuid())
+  companyId   String
+  fileName    String
+  fileType    String?
+  fileSize    Int?
+  source      String    @default("batch")
+  fileHash    String?
+  status      String    @default("pending")
+  startedAt   DateTime?
+  completedAt DateTime?
+  error       String?
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  publicId     String? @unique
+  secureUrl    String?
+  resourceType String?
+
+  records Record[]
+  threats Threat[]
+  company Company  @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  Alert   Alert[]
+
+  @@index([companyId, fileHash, createdAt])
+  @@index([status])
+  @@index([createdAt])
+}
+
+model Record {
+  id            String                      @id @default(uuid())
+  companyId     String
+  uploadId      String
+  txId          String?
+  partner       String?                     @db.VarChar(256)
+  amount        Float?
+  currency      String?                     @db.VarChar(12)
+  date          DateTime?
+  ip            String?                     @db.VarChar(64)
+  device        String?                     @db.VarChar(128)
+  geoCountry    String?                     @db.VarChar(8)
+  geoCity       String?                     @db.VarChar(128)
+  mcc           String?                     @db.VarChar(8)
+  channel       String?                     @db.VarChar(32)
+  raw           Json?
   embeddingJson Json?
+  /// VECTOR dimension: 384 for OpenAI, 1105 for local AI
+  embeddingVec  Unsupported("vector(384)")?
+  createdAt     DateTime                    @default(now())
+  updatedAt     DateTime                    @updatedAt
+  Alert         Alert[]
+  company       Company                     @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  upload        Upload                      @relation(fields: [uploadId], references: [id], onDelete: Cascade)
+  threats       Threat[]
 
-  employee  Employee @relation(fields: [employeeId], references: [id], onDelete: Cascade)
-  createdAt DateTime @default(now())
+  normalizedPartner  String?
+  normalizedCurrency String?
+  userKey            String?
+  accountKey         String?
+  accountMasked      String?
+  timeBucket30s      Int?
+  timeBucket60s      Int?
+  canonicalKey       String?
+  recordSignature    String?
 
-  @@index([employeeId, timestamp])
-}
-
-model FinancialLog {
-  id              String   @id @default(uuid())
-  employeeId      String
-  transactionType String
-  amount          Float
-  notes           String?
-  timestamp       DateTime
-
-  employee  Employee @relation(fields: [employeeId], references: [id], onDelete: Cascade)
-  createdAt DateTime @default(now())
-
-  @@index([employeeId, timestamp])
-  @@index([transactionType, timestamp])
+  @@index([companyId, txId])
+  @@index([companyId, canonicalKey])
+  @@index([companyId, userKey, timeBucket30s])
+  @@index([companyId, createdAt])
+  @@index([companyId, accountKey])
+  @@index([uploadId])
+  @@index([companyId, txId, normalizedPartner, amount, normalizedCurrency, date], map: "idx_company_txid_full")
+  @@index([companyId, normalizedPartner, amount, normalizedCurrency, date], map: "idx_company_strict_tuple")
 }
 
 model Threat {
   id              String   @id @default(uuid())
-  employeeId      String?
+  companyId       String
+  uploadId        String
+  recordId        String?
   threatType      String
-  description     String
-  confidenceScore Float    @default(0.5)
+  description     String   @db.Text
+  confidenceScore Float
   status          String   @default("open")
   createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+  metadata        Json?
+  Alert           Alert[]
+  company         Company  @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  record          Record?  @relation(fields: [recordId], references: [id])
+  upload          Upload   @relation(fields: [uploadId], references: [id], onDelete: Cascade)
 
-  employee Employee?       @relation(fields: [employeeId], references: [id], onDelete: SetNull)
-  reports  WarRoomReport[]
-
-  @@index([employeeId, status, createdAt])
+  @@index([companyId, status, createdAt])
+  @@index([recordId], map: "Threat_recordId_fkey")
+  @@index([uploadId], map: "Threat_uploadId_fkey")
 }
 
-model WarRoomReport {
-  id             String   @id @default(uuid())
-  threatId       String
-  generatedAt    DateTime @default(now())
-  reportUrl      String?
-  recommendation String?
+model Alert {
+  id        String   @id @default(uuid())
+  companyId String
+  recordId  String?
+  threatId  String?
+  uploadId  String?
+  severity  String   @default("medium")
+  title     String
+  summary   String   @db.Text
+  payload   Json?
+  delivered Boolean  @default(false)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  company   Company  @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  record    Record?  @relation(fields: [recordId], references: [id])
+  threat    Threat?  @relation(fields: [threatId], references: [id])
+  upload    Upload?  @relation(fields: [uploadId], references: [id])
 
-  threat Threat @relation(fields: [threatId], references: [id], onDelete: Cascade)
+  @@index([companyId, createdAt])
+  @@index([recordId], map: "Alert_recordId_fkey")
+  @@index([threatId], map: "Alert_threatId_fkey")
+  @@index([uploadId])
+}
+
+model WebhookSubscription {
+  id         String            @id @default(uuid())
+  companyId  String
+  name       String
+  url        String
+  secret     String
+  events     Json
+  active     Boolean           @default(true)
+  createdAt  DateTime          @default(now())
+  updatedAt  DateTime          @updatedAt
+  company    Company           @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  deliveries WebhookDelivery[]
+
+  @@index([companyId, active])
+  @@index([active, companyId])
+}
+
+model WebhookDelivery {
+  id           String              @id @default(uuid())
+  webhookId    String
+  event        String
+  payload      Json
+  success      Boolean
+  attempt      Int
+  error        String?             @db.LongText
+  responseTime Int?
+  environment  String?
+  createdAt    DateTime            @default(now())
+  webhook      WebhookSubscription @relation(fields: [webhookId], references: [id], onDelete: Cascade)
+
+  @@index([webhookId, createdAt])
+  @@index([success, environment])
+  @@index([webhookId, success, createdAt])
+  @@index([createdAt])
+}
+
+model Rule {
+  id          String   @id @default(uuid())
+  companyId   String
+  name        String
+  description String?  @db.Text
+  definition  Json
+  enabled     Boolean  @default(true)
+  priority    Int      @default(0)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  company     Company  @relation(fields: [companyId], references: [id], onDelete: Cascade)
+
+  @@index([companyId], map: "Rule_companyId_fkey")
+  @@index([companyId, priority])
 }

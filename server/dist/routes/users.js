@@ -1,0 +1,14 @@
+"use strict";
+Object.defineProperty(exports, "__esModule", { value: true });
+exports.usersRouter = void 0;
+const express_1 = require("express");
+const userController_1 = require("../controllers/userController");
+const auth_1 = require("../middleware/auth");
+const multer_1 = require("../middleware/multer");
+const router = (0, express_1.Router)();
+exports.usersRouter = router;
+router.get("/", auth_1.authenticateTokenOrApiKey, userController_1.UserController.getUsers);
+router.patch("/:userId/role", auth_1.authenticateTokenOrApiKey, (0, auth_1.requireRole)(["ADMIN"]), userController_1.UserController.updateUserRole);
+router.delete("/:userId", auth_1.authenticateTokenOrApiKey, (0, auth_1.requireRole)(["ADMIN"]), userController_1.UserController.removeUser);
+router.post("/me/avatar", auth_1.authenticateTokenOrApiKey, multer_1.multerConfig, userController_1.UserController.uploadAvatar);
+router.delete("/me/avatar", auth_1.authenticateTokenOrApiKey, userController_1.UserController.deleteAvatar);

@@ -1,0 +1,15 @@
+"use strict";
+Object.defineProperty(exports, "__esModule", { value: true });
+exports.apiKeyRouter = void 0;
+const express_1 = require("express");
+const apiKeyController_1 = require("../controllers/apiKeyController");
+const auth_1 = require("../middleware/auth");
+const router = (0, express_1.Router)();
+exports.apiKeyRouter = router;
+router.post("/", auth_1.authenticateTokenOrApiKey, (0, auth_1.requireRole)(["ADMIN", "MANAGER"]), apiKeyController_1.ApiKeyController.createApiKey);
+router.get("/", auth_1.authenticateTokenOrApiKey, (0, auth_1.requireRole)(["ADMIN", "MANAGER"]), apiKeyController_1.ApiKeyController.listApiKeys);
+router.get("/:id", auth_1.authenticateTokenOrApiKey, (0, auth_1.requireRole)(["ADMIN", "MANAGER"]), apiKeyController_1.ApiKeyController.getApiKeyDetails);
+router.patch("/:id/revoke", auth_1.authenticateTokenOrApiKey, (0, auth_1.requireRole)(["ADMIN", "MANAGER"]), apiKeyController_1.ApiKeyController.revokeApiKey);
+router.patch("/:id/reactivate", auth_1.authenticateTokenOrApiKey, (0, auth_1.requireRole)(["ADMIN", "MANAGER"]), apiKeyController_1.ApiKeyController.reactivateApiKey);
+router.patch("/:id/rotate-secret", auth_1.authenticateTokenOrApiKey, (0, auth_1.requireRole)(["ADMIN", "MANAGER"]), apiKeyController_1.ApiKeyController.rotateApiKeySecret);
+router.delete("/:id", auth_1.authenticateTokenOrApiKey, (0, auth_1.requireRole)(["ADMIN", "MANAGER"]), apiKeyController_1.ApiKeyController.deleteApiKey);
