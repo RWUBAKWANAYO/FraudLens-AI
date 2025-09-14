@@ -1,5 +1,6 @@
 import { v2 as cloudinary } from "cloudinary";
 import fetch from "node-fetch";
+import { v4 as uuidv4 } from "uuid";
 
 interface ICloudinaryResponse {
   secure_url: string;
@@ -134,6 +135,73 @@ export class CloudinaryService {
     } catch (error) {
       console.error("Cloudinary direct download error:", error);
       throw new Error("Failed to download file from cloud storage");
+    }
+  }
+
+  static async uploadImage(
+    buffer: Buffer,
+    fileName: string,
+    folder: string
+  ): Promise<ICloudinaryResponse> {
+    return new Promise((resolve, reject) => {
+      const fileExtension = fileName.split(".").pop()?.toLowerCase();
+      const baseName = fileName.replace(/\.[^/.]+$/, "");
+      const uniqueId = uuidv4();
+      const uniquePublicId = `${baseName}_${uniqueId}${fileExtension ? `.${fileExtension}` : ""}`;
+
+      const uploadOptions: any = {
+        resource_type: "image",
+        folder: `${process.env.CLOUDINARY_UPLOAD_DIRECTORY}/${folder}`,
+        public_id: uniquePublicId,
+        filename_override: fileName,
+        use_filename: false,
+        unique_filename: true,
+        allowed_formats: ["jpg", "jpeg", "png", "gif", "webp"],
+        timeout: 30000,
+        transformation: [
+          {
+            quality: "auto",
+            fetch_format: "auto",
+          },
+        ],
+      };
+
+      const uploadStream = cloudinary.uploader.upload_stream(uploadOptions, (error, result) => {
+        if (error) {
+          console.error("Cloudinary upload error:", error);
+          reject(error);
+        } else if (result) {
+          resolve({
+            secure_url: result.secure_url,
+            public_id: result.public_id,
+            resource_type: result.resource_type,
+            bytes: result.bytes,
+          });
+        } else {
+          reject(new Error("Upload failed with no error or result"));
+        }
+      });
+
+      uploadStream.on("error", (error) => {
+        console.error("Cloudinary stream error:", error);
+        reject(error);
+      });
+
+      const bufferStream = require("stream").PassThrough();
+      bufferStream.end(buffer);
+      bufferStream.pipe(uploadStream);
+    });
+  }
+
+  static async deleteImage(publicId: string): Promise<boolean> {
+    try {
+      const result = await cloudinary.uploader.destroy(publicId, {
+        resource_type: "image",
+      });
+      return result.result === "ok";
+    } catch (error) {
+      console.error("Error deleting image:", error);
+      return false;
     }
   }
 }

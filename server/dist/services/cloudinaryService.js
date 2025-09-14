@@ -22,6 +22,7 @@ Object.defineProperty(exports, "__esModule", { value: true });
 exports.CloudinaryService = void 0;
 const cloudinary_1 = require("cloudinary");
 const node_fetch_1 = __importDefault(require("node-fetch"));
+const uuid_1 = require("uuid");
 cloudinary_1.v2.config({
     cloud_name: process.env.CLOUDINARY_CLOUD_NAME,
     api_key: process.env.CLOUDINARY_API_KEY,
@@ -155,6 +156,71 @@ class CloudinaryService {
             catch (error) {
                 console.error("Cloudinary direct download error:", error);
                 throw new Error("Failed to download file from cloud storage");
+            }
+        });
+    }
+    static uploadImage(buffer, fileName, folder) {
+        return __awaiter(this, void 0, void 0, function* () {
+            return new Promise((resolve, reject) => {
+                var _a;
+                const fileExtension = (_a = fileName.split(".").pop()) === null || _a === void 0 ? void 0 : _a.toLowerCase();
+                const baseName = fileName.replace(/\.[^/.]+$/, "");
+                const uniqueId = (0, uuid_1.v4)();
+                const uniquePublicId = `${baseName}_${uniqueId}${fileExtension ? `.${fileExtension}` : ""}`;
+                const uploadOptions = {
+                    resource_type: "image",
+                    folder: `${process.env.CLOUDINARY_UPLOAD_DIRECTORY}/${folder}`,
+                    public_id: uniquePublicId,
+                    filename_override: fileName,
+                    use_filename: false,
+                    unique_filename: true,
+                    allowed_formats: ["jpg", "jpeg", "png", "gif", "webp"],
+                    timeout: 30000,
+                    transformation: [
+                        {
+                            quality: "auto",
+                            fetch_format: "auto",
+                        },
+                    ],
+                };
+                const uploadStream = cloudinary_1.v2.uploader.upload_stream(uploadOptions, (error, result) => {
+                    if (error) {
+                        console.error("Cloudinary upload error:", error);
+                        reject(error);
+                    }
+                    else if (result) {
+                        resolve({
+                            secure_url: result.secure_url,
+                            public_id: result.public_id,
+                            resource_type: result.resource_type,
+                            bytes: result.bytes,
+                        });
+                    }
+                    else {
+                        reject(new Error("Upload failed with no error or result"));
+                    }
+                });
+                uploadStream.on("error", (error) => {
+                    console.error("Cloudinary stream error:", error);
+                    reject(error);
+                });
+                const bufferStream = require("stream").PassThrough();
+                bufferStream.end(buffer);
+                bufferStream.pipe(uploadStream);
+            });
+        });
+    }
+    static deleteImage(publicId) {
+        return __awaiter(this, void 0, void 0, function* () {
+            try {
+                const result = yield cloudinary_1.v2.uploader.destroy(publicId, {
+                    resource_type: "image",
+                });
+                return result.result === "ok";
+            }
+            catch (error) {
+                console.error("Error deleting image:", error);
+                return false;
             }
         });
     }

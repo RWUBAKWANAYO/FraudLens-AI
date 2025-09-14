@@ -132,83 +132,93 @@ export default function UploadHistory() {
         <div className="flex flex-col flex-grow">
           <div className="flex items-center justify-between">
             <h2 className="text-lg font-bold">Uploaded File List</h2>
-            <Button
-              onClick={clearAllFilters}
-              className="colored-button bg-colored-primary text-white font-semibold "
-              disabled={!hasActiveFilters}
-            >
-              <X className="h-4 w-4" />
-              Clear Filters
-            </Button>
+            {uploadsResponse?.uploads.length > 0 && (
+              <Button
+                onClick={clearAllFilters}
+                className="colored-button bg-colored-primary text-white font-semibold "
+                disabled={!hasActiveFilters}
+              >
+                <X className="h-4 w-4" />
+                Clear Filters
+              </Button>
+            )}
           </div>
-          <div className="w-full flex flex-col xl:flex-row items-start xl:items-end justify-between gap-4 mt-4 mb-10">
-            <DateRangePicker title="Date Range" onChange={handleDateRangeChange} />
+          {uploadsResponse?.uploads.length > 0 && (
+            <div className="w-full flex flex-col xl:flex-row items-start xl:items-end justify-between gap-4 mt-4 mb-10">
+              <DateRangePicker title="Date Range" onChange={handleDateRangeChange} />
 
-            <div className="flex flex-col sm:flex-row items-start sm:items-end gap-4 w-full xl:w-auto">
-              <div className="space-y-2">
-                <label className="text-sm font-semibold px-1">Status</label>
-                <Select value={queryParams.status || "all"} onValueChange={handleStatusFilter}>
-                  <SelectTrigger className="w-[150px] border-accent-foreground focus:border-colored-primary focus:ring-0">
-                    <SelectValue placeholder="All Status" />
-                  </SelectTrigger>
-                  <SelectContent className="bg-foreground border-accent-foreground">
-                    <SelectItem value="all">All Status</SelectItem>
-                    {STATUS_OPTIONS.map((status) => (
-                      <SelectItem key={status} value={status}>
-                        {status.charAt(0).toUpperCase() + status.slice(1)}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
+              <div className="flex flex-col sm:flex-row items-start sm:items-end gap-4 w-full xl:w-auto">
+                <div className="space-y-2">
+                  <label className="text-sm font-semibold px-1">Status</label>
+                  <Select value={queryParams.status || "all"} onValueChange={handleStatusFilter}>
+                    <SelectTrigger className="w-[150px] border-accent-foreground focus:border-colored-primary focus:ring-0">
+                      <SelectValue placeholder="All Status" />
+                    </SelectTrigger>
+                    <SelectContent className="bg-foreground border-accent-foreground">
+                      <SelectItem value="all">All Status</SelectItem>
+                      {STATUS_OPTIONS.map((status) => (
+                        <SelectItem key={status} value={status}>
+                          {status.charAt(0).toUpperCase() + status.slice(1)}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
 
-              <div className="space-y-2">
-                <label className="text-sm font-semibold px-1">File Type</label>
-                <Select value={queryParams.fileType || "all"} onValueChange={handleFileTypeFilter}>
-                  <SelectTrigger className="w-[150px] border-accent-foreground focus:border-colored-primary focus:ring-0">
-                    <SelectValue placeholder="All Types" />
-                  </SelectTrigger>
-                  <SelectContent className="bg-foreground border-accent-foreground">
-                    <SelectItem value="all">All Types</SelectItem>
-                    {FILE_TYPE_OPTIONS.map((type) => (
-                      <SelectItem key={type} value={type}>
-                        {type ===
-                        "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
-                          ? "XLSX"
-                          : type.split("/")[1].toUpperCase()}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
+                <div className="space-y-2">
+                  <label className="text-sm font-semibold px-1">File Type</label>
+                  <Select
+                    value={queryParams.fileType || "all"}
+                    onValueChange={handleFileTypeFilter}
+                  >
+                    <SelectTrigger className="w-[150px] border-accent-foreground focus:border-colored-primary focus:ring-0">
+                      <SelectValue placeholder="All Types" />
+                    </SelectTrigger>
+                    <SelectContent className="bg-foreground border-accent-foreground">
+                      <SelectItem value="all">All Types</SelectItem>
+                      {FILE_TYPE_OPTIONS.map((type) => (
+                        <SelectItem key={type} value={type}>
+                          {type ===
+                          "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+                            ? "XLSX"
+                            : type.split("/")[1].toUpperCase()}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
 
-              <div className="space-y-2">
-                <label className="text-sm font-semibold px-1">Sort By</label>
-                <Select value={queryParams.sortBy || "createdAt"} onValueChange={handleSortChange}>
-                  <SelectTrigger className="w-[150px] border-accent-foreground focus:border-colored-primary focus:ring-0">
-                    <SelectValue placeholder="Sort By" />
-                  </SelectTrigger>
-                  <SelectContent className="bg-foreground border-accent-foreground">
-                    <SelectItem value="fileName">File Name</SelectItem>
-                    <SelectItem value="fileType">File Type</SelectItem>
-                    <SelectItem value="fileSize">File Size</SelectItem>
-                    <SelectItem value="createdAt">Date Created</SelectItem>
-                    <SelectItem value="completedAt">Date Completed</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
+                <div className="space-y-2">
+                  <label className="text-sm font-semibold px-1">Sort By</label>
+                  <Select
+                    value={queryParams.sortBy || "createdAt"}
+                    onValueChange={handleSortChange}
+                  >
+                    <SelectTrigger className="w-[150px] border-accent-foreground focus:border-colored-primary focus:ring-0">
+                      <SelectValue placeholder="Sort By" />
+                    </SelectTrigger>
+                    <SelectContent className="bg-foreground border-accent-foreground">
+                      <SelectItem value="fileName">File Name</SelectItem>
+                      <SelectItem value="fileType">File Type</SelectItem>
+                      <SelectItem value="fileSize">File Size</SelectItem>
+                      <SelectItem value="createdAt">Date Created</SelectItem>
+                      <SelectItem value="completedAt">Date Completed</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
 
-              <div className="relative flex-1 w-full sm:w-auto">
-                <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-400" />
-                <Input
-                  placeholder="Search files..."
-                  value={searchTerm}
-                  onChange={(e) => handleSearchInput(e.target.value)}
-                  className="pl-10 h-10 w-full xl:w-[200px] 2xl:w-[250px] border-accent-foreground focus:border-colored-primary focus-visible:ring-0"
-                />
+                <div className="relative flex-1 w-full sm:w-auto">
+                  <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-400" />
+                  <Input
+                    placeholder="Search files..."
+                    value={searchTerm}
+                    onChange={(e) => handleSearchInput(e.target.value)}
+                    className="pl-10 h-10 w-full xl:w-[200px] 2xl:w-[250px] border-accent-foreground focus:border-colored-primary focus-visible:ring-0"
+                  />
+                </div>
               </div>
             </div>
-          </div>
+          )}
 
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5 gap-4">
             {uploadsResponse.uploads.map((upload) => (
@@ -222,7 +232,7 @@ export default function UploadHistory() {
         <StatusMessage
           height="auto"
           classNames="flex-grow align-start mb-8"
-          info="No uploads found matching your criteria."
+          info="No uploads found."
         />
       )}
 

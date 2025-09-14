@@ -33,6 +33,8 @@ model User {
   password          String
   fullName          String
   companyId         String
+  avatarUrl         String?      @db.VarChar(512)
+  avatarPublicId    String?      @db.VarChar(512)
   role              UserRole     @default(MEMBER)
   isVerified        Boolean      @default(false)
   verificationToken String?      @db.VarChar(512)

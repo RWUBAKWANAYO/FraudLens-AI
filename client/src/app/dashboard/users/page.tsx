@@ -37,7 +37,7 @@ export default function UsersListPage() {
               <div className="flex flex-col sm:flex-row gap-4">
                 <Avatar className="h-[175px] w-full sm:w-[175px] rounded-lg">
                   <AvatarImage
-                    src={user.avatar}
+                    src={user.avatarUrl}
                     alt={user.fullName}
                     className="w-full h-full object-cover"
                   />

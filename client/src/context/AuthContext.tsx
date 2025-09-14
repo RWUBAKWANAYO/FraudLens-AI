@@ -5,14 +5,7 @@ import { api, setAccessToken } from "@/lib/api";
 import { usePathname, useRouter } from "next/navigation";
 import { User } from "@/types/user.interface";
 import { publicRoutes } from "@/config/app-routes";
-
-type AuthContextType = {
-  user: User | null;
-  loading: boolean;
-  login: (email: string, password: string) => Promise<void>;
-  logout: () => Promise<void>;
-  refreshAccessToken: () => Promise<void>;
-};
+import { AuthContextType } from "./types";
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
@@ -81,8 +74,12 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
   };
 
+  const updateUser = (user: User) => {
+    setUser((prev) => (prev ? { ...prev, ...user } : user));
+  };
+
   return (
-    <AuthContext.Provider value={{ user, loading, login, logout, refreshAccessToken }}>
+    <AuthContext.Provider value={{ user, loading, login, logout, refreshAccessToken, updateUser }}>
       {children}
     </AuthContext.Provider>
   );

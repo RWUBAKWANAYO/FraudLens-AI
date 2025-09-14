@@ -36,7 +36,7 @@ export function RecentUsers() {
           <div className="flex flex-1 flex-row items-center gap-x-3">
             <Avatar className="h-10 w-10">
               <AvatarImage
-                src={user.avatar}
+                src={user.avatarUrl}
                 alt={user.fullName}
                 className="w-full h-full object-cover h-10 w-10 rounded-full"
               />

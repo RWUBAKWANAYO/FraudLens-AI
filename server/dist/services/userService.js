@@ -11,6 +11,8 @@ var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, P, ge
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.UserService = void 0;
 const db_1 = require("../config/db");
+const imageService_1 = require("./imageService");
+const cloudinaryService_1 = require("./cloudinaryService");
 class UserService {
     static getCompanyUsers(companyId) {
         return __awaiter(this, void 0, void 0, function* () {
@@ -21,6 +23,8 @@ class UserService {
                     email: true,
                     fullName: true,
                     role: true,
+                    avatarUrl: true,
+                    avatarPublicId: true,
                     isVerified: true,
                     lastLogin: true,
                     createdAt: true,
@@ -94,6 +98,68 @@ class UserService {
             return yield db_1.prisma.user.delete({
                 where: { id: userId },
             });
+        });
+    }
+    static updateImage(userId, companyId, imageData) {
+        return __awaiter(this, void 0, void 0, function* () {
+            const user = yield db_1.prisma.user.findUnique({
+                where: { id: userId, companyId },
+            });
+            if (!user) {
+                throw new Error("User not found");
+            }
+            if (user.avatarPublicId) {
+                yield cloudinaryService_1.CloudinaryService.deleteImage(user.avatarPublicId).catch((error) => console.error("Failed to delete old image:", error));
+            }
+            const avatarResult = yield imageService_1.ImageService.uploadImage(imageData.buffer, imageData.fileName, userId);
+            const updatedUser = yield db_1.prisma.user.update({
+                where: { id: userId },
+                data: {
+                    avatarUrl: avatarResult.url,
+                    avatarPublicId: avatarResult.publicId,
+                },
+                select: {
+                    id: true,
+                    email: true,
+                    fullName: true,
+                    role: true,
+                    avatarUrl: true,
+                    avatarPublicId: true,
+                },
+            });
+            return updatedUser;
+        });
+    }
+    static deleteImage(userId, companyId) {
+        return __awaiter(this, void 0, void 0, function* () {
+            const user = yield db_1.prisma.user.findUnique({
+                where: { id: userId, companyId },
+            });
+            if (!user) {
+                throw new Error("User not found");
+            }
+            if (!user.avatarPublicId) {
+                throw new Error("No image to delete");
+            }
+            const deleteSuccess = yield cloudinaryService_1.CloudinaryService.deleteImage(user.avatarPublicId);
+            if (!deleteSuccess) {
+                throw new Error("Failed to delete avatar from storage");
+            }
+            const updatedUser = yield db_1.prisma.user.update({
+                where: { id: userId },
+                data: {
+                    avatarUrl: null,
+                    avatarPublicId: null,
+                },
+                select: {
+                    id: true,
+                    email: true,
+                    fullName: true,
+                    role: true,
+                    avatarUrl: true,
+                },
+            });
+            return updatedUser;
         });
     }
 }

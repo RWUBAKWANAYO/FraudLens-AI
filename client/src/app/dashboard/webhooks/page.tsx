@@ -47,7 +47,10 @@ export default function WebhooksList() {
   }
 
   return (
-    <div className="bg-foreground rounded-lg p-6" style={{ minHeight: "calc(100vh - 120px)" }}>
+    <div
+      className="bg-foreground rounded-lg p-6 flex flex-col"
+      style={{ minHeight: "calc(100vh - 120px)" }}
+    >
       <div className="w-full flex flex-col sm:flex-row gap-4 items-start sm:items-center justify-between mb-6">
         <div>
           <h2 className="text-lg font-bold">Webhooks</h2>
@@ -57,112 +60,116 @@ export default function WebhooksList() {
         </div>
         <CreateWebhook />
       </div>
+      {webhooks && webhooks.length === 0 && (
+        <StatusMessage info="No webhooks found" height="auto" classNames="flex-grow items-center" />
+      )}
+      {webhooks && webhooks.length > 0 && (
+        <div className="w-full overflow-hidden rounded-md border border-accent">
+          <Table className="min-w-[1200px]">
+            <TableHeader className="bg-tableHover">
+              <TableRow className="border-accent text-primary">
+                <TableHead className="py-4 text-primary font-bold">Name</TableHead>
+                <TableHead className="py-4 text-primary font-bold">URL</TableHead>
+                <TableHead className="py-4 text-primary font-bold">Events</TableHead>
+                <TableHead className="py-4 text-primary font-bold">Secret</TableHead>
+                <TableHead className="py-4 text-primary font-bold">Status</TableHead>
+                <TableHead className="py-4 text-primary font-bold whitespace-nowrap">
+                  Last Delivery
+                </TableHead>
+                <TableHead className="py-4 text-primary font-bold text-right">Actions</TableHead>
+              </TableRow>
+            </TableHeader>
 
-      <div className="w-full overflow-hidden rounded-md border border-accent">
-        <Table className="min-w-[1200px]">
-          <TableHeader className="bg-tableHover">
-            <TableRow className="border-accent text-primary">
-              <TableHead className="py-4 text-primary font-bold">Name</TableHead>
-              <TableHead className="py-4 text-primary font-bold">URL</TableHead>
-              <TableHead className="py-4 text-primary font-bold">Events</TableHead>
-              <TableHead className="py-4 text-primary font-bold">Secret</TableHead>
-              <TableHead className="py-4 text-primary font-bold">Status</TableHead>
-              <TableHead className="py-4 text-primary font-bold whitespace-nowrap">
-                Last Delivery
-              </TableHead>
-              <TableHead className="py-4 text-primary font-bold text-right">Actions</TableHead>
-            </TableRow>
-          </TableHeader>
+            <TableBody>
+              {webhooks?.map((webhook) => {
+                const isLoading =
+                  updateWebhookMutation.isPending &&
+                  updateWebhookMutation.variables?.id === webhook.id;
 
-          <TableBody>
-            {webhooks?.map((webhook) => {
-              const isLoading =
-                updateWebhookMutation.isPending &&
-                updateWebhookMutation.variables?.id === webhook.id;
+                return (
+                  <TableRow key={webhook.id} className="border-b border-accent hover:bg-tableHover">
+                    <TableCell className="py-4">
+                      <div className="flex items-center gap-2 whitespace-nowrap">
+                        <Globe className="h-4 w-4 text-muted-foreground" />
+                        {webhook.name}
+                      </div>
+                    </TableCell>
 
-              return (
-                <TableRow key={webhook.id} className="border-b border-accent hover:bg-tableHover">
-                  <TableCell className="py-4">
-                    <div className="flex items-center gap-2 whitespace-nowrap">
-                      <Globe className="h-4 w-4 text-muted-foreground" />
-                      {webhook.name}
-                    </div>
-                  </TableCell>
+                    <TableCell className="py-4">
+                      <div className="flex items-center gap-2">
+                        <CopyableCell value={webhook.url} />
+                      </div>
+                    </TableCell>
 
-                  <TableCell className="py-4">
-                    <div className="flex items-center gap-2">
-                      <CopyableCell value={webhook.url} />
-                    </div>
-                  </TableCell>
+                    <TableCell className="py-4">
+                      <div className="max-w-[200px]">
+                        <span className="text-sm line-clamp-2" title={formatEvents(webhook.events)}>
+                          {formatEvents(webhook.events)}
+                        </span>
+                      </div>
+                    </TableCell>
 
-                  <TableCell className="py-4">
-                    <div className="max-w-[200px]">
-                      <span className="text-sm line-clamp-2" title={formatEvents(webhook.events)}>
-                        {formatEvents(webhook.events)}
-                      </span>
-                    </div>
-                  </TableCell>
+                    <TableCell className="py-4">
+                      <CopyableCell value={webhook.secret} maskable defaultVisible={false} />
+                    </TableCell>
 
-                  <TableCell className="py-4">
-                    <CopyableCell value={webhook.secret} maskable defaultVisible={false} />
-                  </TableCell>
-
-                  <TableCell className="py-4">
-                    <div
-                      className={`font-medium text-center py-[2px] px-2 w-fit rounded-full capitalize ${
-                        webhook.active
-                          ? "bg-badge-greenBg text-emerald-500 border border-badge-greenBorder"
-                          : "bg-badge-redBg text-red-500 border border-badge-redBorder"
-                      }`}
-                    >
-                      {webhook.active ? "active" : "inactive"}
-                    </div>
-                  </TableCell>
-
-                  <TableCell className="py-4">
-                    <div className="flex items-center gap-2 whitespace-nowrap">
-                      {webhook.lastDelivery ? (
-                        <>
-                          <span className="text-sm">
-                            {moment(webhook.lastDelivery.createdAt).fromNow()}
-                          </span>
-                          <div
-                            className={`w-2 h-2 rounded-full ${
-                              webhook.lastDelivery.success ? "bg-emerald-500" : "bg-red-500"
-                            }`}
-                            title={webhook.lastDelivery.success ? "success" : "failed"}
-                          />
-                        </>
-                      ) : (
-                        <span className="text-sm">Never</span>
-                      )}
-                    </div>
-                  </TableCell>
-
-                  <TableCell className="py-4 text-right">
-                    <div className="flex gap-2 justify-end">
-                      <Button
-                        size="sm"
-                        className="flex items-center colored-button gap-1 bg-foreground text-primary shadow-sm border border-accent w-[120px]"
-                        onClick={() => toggleWebhookStatus(webhook.id, webhook.active)}
-                        disabled={isLoading}
+                    <TableCell className="py-4">
+                      <div
+                        className={`font-medium text-center py-[2px] px-2 w-fit rounded-full capitalize ${
+                          webhook.active
+                            ? "bg-badge-greenBg text-emerald-500 border border-badge-greenBorder"
+                            : "bg-badge-redBg text-red-500 border border-badge-redBorder"
+                        }`}
                       >
-                        {isLoading ? (
-                          <Loader2Icon className="h-4 w-4 animate-spin" />
+                        {webhook.active ? "active" : "inactive"}
+                      </div>
+                    </TableCell>
+
+                    <TableCell className="py-4">
+                      <div className="flex items-center gap-2 whitespace-nowrap">
+                        {webhook.lastDelivery ? (
+                          <>
+                            <span className="text-sm">
+                              {moment(webhook.lastDelivery.createdAt).fromNow()}
+                            </span>
+                            <div
+                              className={`w-2 h-2 rounded-full ${
+                                webhook.lastDelivery.success ? "bg-emerald-500" : "bg-red-500"
+                              }`}
+                              title={webhook.lastDelivery.success ? "success" : "failed"}
+                            />
+                          </>
                         ) : (
-                          <Power className="h-4 w-4" />
+                          <span className="text-sm">Never</span>
                         )}
-                        {webhook.active ? "Deactivate" : "Activate"}
-                      </Button>
-                      <RemoveWebhook webhookId={webhook.id} webhookName={webhook.name} />
-                    </div>
-                  </TableCell>
-                </TableRow>
-              );
-            })}
-          </TableBody>
-        </Table>
-      </div>
+                      </div>
+                    </TableCell>
+
+                    <TableCell className="py-4 text-right">
+                      <div className="flex gap-2 justify-end">
+                        <Button
+                          size="sm"
+                          className="flex items-center colored-button gap-1 bg-foreground text-primary shadow-sm border border-accent w-[120px]"
+                          onClick={() => toggleWebhookStatus(webhook.id, webhook.active)}
+                          disabled={isLoading}
+                        >
+                          {isLoading ? (
+                            <Loader2Icon className="h-4 w-4 animate-spin" />
+                          ) : (
+                            <Power className="h-4 w-4" />
+                          )}
+                          {webhook.active ? "Deactivate" : "Activate"}
+                        </Button>
+                        <RemoveWebhook webhookId={webhook.id} webhookName={webhook.name} />
+                      </div>
+                    </TableCell>
+                  </TableRow>
+                );
+              })}
+            </TableBody>
+          </Table>
+        </div>
+      )}
     </div>
   );
 }

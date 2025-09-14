@@ -3,7 +3,8 @@ export interface User {
   fullName: string;
   email: string;
   role: "ADMIN" | "MANAGER" | "MEMBER";
-  avatar?: string;
+  avatarUrl?: string;
+  avatarPublicId?: string;
   createdAt: string;
   updatedAt: string;
   lastLogin: string;

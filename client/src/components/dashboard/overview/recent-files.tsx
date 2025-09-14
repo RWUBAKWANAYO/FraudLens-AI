@@ -57,7 +57,7 @@ export function RecentFiles() {
           classNames="bg-foreground items-center"
         />
       )}
-      {uploadedFiles?.uploads?.length && uploadedFiles?.uploads?.length > 0 && (
+      {uploadedFiles?.uploads && uploadedFiles?.uploads.length > 0 && (
         <div className="overflow-hidden rounded-md border border-accent">
           <Table className="min-w-[700px]">
             <TableHeader className="bg-tableHover">

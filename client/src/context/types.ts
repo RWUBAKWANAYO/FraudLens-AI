@@ -1,3 +1,5 @@
+import { User } from "@/types/user.interface";
+
 export interface UploadProgress {
   uploadId: string;
   progress: number;
@@ -44,3 +46,12 @@ export interface UploadContextType {
   clearAlerts: () => void;
   dismissAlert: (alertId: string) => void;
 }
+
+export type AuthContextType = {
+  user: User | null;
+  loading: boolean;
+  login: (email: string, password: string) => Promise<void>;
+  logout: () => Promise<void>;
+  refreshAccessToken: () => Promise<void>;
+  updateUser: (user: User) => void;
+};

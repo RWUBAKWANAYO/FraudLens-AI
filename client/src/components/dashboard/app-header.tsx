@@ -28,15 +28,7 @@ export const Header = ({ navItems }: { navItems: NavItem[] }) => {
       <div className="flex items-center gap-8">
         <ModeToggle />
         {loading && <HeaderProfileSkeleton />}
-        {!loading && user && (
-          <NavUser
-            user={{
-              name: user.fullName,
-              email: user.email,
-              avatar: user.avatar || "",
-            }}
-          />
-        )}
+        {!loading && user && <NavUser user={user} />}
       </div>
     </div>
   );

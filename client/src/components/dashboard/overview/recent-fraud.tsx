@@ -49,7 +49,7 @@ export function RecentFraud() {
           classNames="bg-foreground items-center"
         />
       )}
-      {threatsResponse?.data?.length && threatsResponse?.data?.length > 0 && (
+      {threatsResponse?.data && threatsResponse?.data?.length > 0 && (
         <div className="overflow-hidden rounded-md border border-accent">
           <Table className="min-w-[700px]">
             <TableHeader className="bg-tableHover">

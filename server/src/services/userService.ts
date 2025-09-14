@@ -1,5 +1,7 @@
 import { UserRole } from "@prisma/client";
 import { prisma } from "../config/db";
+import { ImageService } from "./imageService";
+import { CloudinaryService } from "./cloudinaryService";
 
 export class UserService {
   static async getCompanyUsers(companyId: string) {
@@ -10,6 +12,8 @@ export class UserService {
         email: true,
         fullName: true,
         role: true,
+        avatarUrl: true,
+        avatarPublicId: true,
         isVerified: true,
         lastLogin: true,
         createdAt: true,
@@ -92,5 +96,86 @@ export class UserService {
     return await prisma.user.delete({
       where: { id: userId },
     });
+  }
+
+  static async updateImage(
+    userId: string,
+    companyId: string,
+    imageData: { buffer: Buffer; fileName: string }
+  ) {
+    const user = await prisma.user.findUnique({
+      where: { id: userId, companyId },
+    });
+
+    if (!user) {
+      throw new Error("User not found");
+    }
+
+    if (user.avatarPublicId) {
+      await CloudinaryService.deleteImage(user.avatarPublicId).catch((error) =>
+        console.error("Failed to delete old image:", error)
+      );
+    }
+
+    const avatarResult = await ImageService.uploadImage(
+      imageData.buffer,
+      imageData.fileName,
+      userId
+    );
+
+    const updatedUser = await prisma.user.update({
+      where: { id: userId },
+      data: {
+        avatarUrl: avatarResult.url,
+        avatarPublicId: avatarResult.publicId,
+      },
+      select: {
+        id: true,
+        email: true,
+        fullName: true,
+        role: true,
+        avatarUrl: true,
+        avatarPublicId: true,
+      },
+    });
+
+    return updatedUser;
+  }
+
+  static async deleteImage(userId: string, companyId: string) {
+    const user = await prisma.user.findUnique({
+      where: { id: userId, companyId },
+    });
+
+    if (!user) {
+      throw new Error("User not found");
+    }
+
+    if (!user.avatarPublicId) {
+      throw new Error("No image to delete");
+    }
+
+    const deleteSuccess = await CloudinaryService.deleteImage(user.avatarPublicId);
+
+    if (!deleteSuccess) {
+      throw new Error("Failed to delete avatar from storage");
+    }
+
+    const updatedUser = await prisma.user.update({
+      where: { id: userId },
+      data: {
+        avatarUrl: null,
+        avatarPublicId: null,
+      },
+      select: {
+        id: true,
+        email: true,
+        fullName: true,
+        role: true,
+        avatarUrl: true,
+      },
+    });
+
+    return updatedUser;
   }
 }

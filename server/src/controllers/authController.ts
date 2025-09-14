@@ -96,6 +96,9 @@ export class AuthController {
           email: user.email,
           fullName: user.fullName,
           role: user.role,
+          avatarUrl: user.avatarUrl,
+          avatarPublicId: user.avatarPublicId,
+
           company: {
             id: user.company.id,
             name: user.company.name,
@@ -154,6 +157,8 @@ export class AuthController {
             email: user.email,
             fullName: user.fullName,
             role: user.role,
+            avatarUrl: user.avatarUrl,
+            avatarPublicId: user.avatarPublicId,
             company: {
               id: user.company.id,
               name: user.company.name,
