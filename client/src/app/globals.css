@@ -27,6 +27,7 @@
     --popover-foreground: #0a0a0a;
     --primary: #000000;
     --primary-foreground: rgb(0, 0, 0, 0.5);
+    --primary-foregroundHalf: rgb(0, 0, 0, 0.3);
     --secondary: #f5f5f5;
     --secondary-foreground: #111111;
     --muted: #f5f5f5;
@@ -66,6 +67,7 @@
     --popover-foreground: #fafafa;
     --primary: #ffffff;
     --primary-foreground: rgba(255, 255, 255, 0.5);
+    --primary-foregroundHalf: rgba(255, 255, 255, 0.3);
     --secondary: #262626;
     --secondary-foreground: #fafafa;
     --muted: #262626;
@@ -102,12 +104,7 @@
     padding: 0;
   }
   .gradient-card {
-    background-color: #fd892f;
-    background: linear-gradient(90deg, rgba(253, 136, 47, 0.9) 20%, rgba(252, 75, 26, 0.9));
-  }
-  .gradient-card:hover {
-    transform: scale(1.05);
-    transition: transform 0.3s ease-in-out;
+    background: linear-gradient(180deg, rgba(253, 136, 47, 0) 50%, rgba(253, 136, 47, 0.2) 50%);
   }
   .colored-button {
     @apply hover:bg-colored-hover hover:text-white disabled:opacity-50 disabled:cursor-not-allowed;

@@ -7,7 +7,15 @@ import { acceptInviteSchema, type AcceptInviteFormData } from "@/lib/zod-schemas
 import { useAcceptInvite } from "@/hooks/useAuth";
 import { useSearchParams } from "next/navigation";
 
-const AcceptInvite = () => {
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Card, CardContent, CardHeader } from "@/components/ui/card";
+import { SwitchThemeButton } from "@/components/common/mode-toggle";
+import { Logo } from "@/components/common/logo";
+import { ErrorCard } from "@/components/common/status-message";
+
+export default function AcceptInvitePage() {
   const searchParams = useSearchParams();
   const token = searchParams.get("token");
   const { mutate: acceptInvite, isPending, error } = useAcceptInvite();
@@ -22,58 +30,68 @@ const AcceptInvite = () => {
   });
 
   useEffect(() => {
-    if (token) {
-      setValue("token", token);
-    }
+    if (token) setValue("token", token);
   }, [token, setValue]);
 
-  const onSubmit = (data: AcceptInviteFormData) => {
-    acceptInvite(data);
-  };
+  const onSubmit = (data: AcceptInviteFormData) => acceptInvite(data);
 
   return (
-    <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
-      {error && (
-        <div className="bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded">
-          {error.message}
-        </div>
-      )}
-
-      {!token && (
-        <div>
-          <label htmlFor="token" className="block text-sm font-medium text-gray-700">
-            Invitation Token
-          </label>
-          <input
-            {...register("token")}
-            type="text"
-            className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500"
-          />
-          {errors.token && <p className="mt-1 text-sm text-red-600">{errors.token.message}</p>}
-        </div>
-      )}
-
-      <div>
-        <label htmlFor="password" className="block text-sm font-medium text-gray-700">
-          Password
-        </label>
-        <input
-          {...register("password")}
-          type="password"
-          className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500"
-        />
-        {errors.password && <p className="mt-1 text-sm text-red-600">{errors.password.message}</p>}
+    <div className="min-h-screen bg-background flex items-center justify-center p-4">
+      <div className="absolute top-6 left-6 right-6 flex justify-between items-center">
+        <Logo />
+        <SwitchThemeButton />
       </div>
 
-      <button
-        type="submit"
-        disabled={isPending}
-        className="w-full flex justify-center py-2 px-4 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 disabled:opacity-50"
-      >
-        {isPending ? "Accepting..." : "Accept invitation"}
-      </button>
-    </form>
-  );
-};
+      <Card className="w-full max-w-md bg-foreground shadow-lg border-0 p-4">
+        <CardHeader className="pb-6">
+          <h1 className="text-2xl font-bold text-primary">Accept Invitation</h1>
+          <p className="text-primary-foreground text-sm">
+            Set a password to join the invited company.
+          </p>
+        </CardHeader>
 
-export default AcceptInvite;
+        <CardContent>
+          {error && <ErrorCard error={error} classNames="mb-4" />}
+
+          <form onSubmit={handleSubmit(onSubmit)} className="space-y-6">
+            {!token && (
+              <div className="space-y-2">
+                <Label htmlFor="token" className="text-sm font-semibold text-primary">
+                  Invitation Token
+                </Label>
+                <Input
+                  id="token"
+                  type="text"
+                  {...register("token")}
+                  className="border-primary-foregroundHalf focus:border-colored-primary focus-visible:ring-colored-primary"
+                />
+                {errors.token && <p className="text-sm text-red-600">{errors.token.message}</p>}
+              </div>
+            )}
+
+            <div className="space-y-2">
+              <Label htmlFor="password" className="text-sm font-semibold text-primary">
+                Password
+              </Label>
+              <Input
+                id="password"
+                type="password"
+                {...register("password")}
+                className="border-primary-foregroundHalf focus:border-colored-primary focus-visible:ring-colored-primary"
+              />
+              {errors.password && <p className="text-sm text-red-600">{errors.password.message}</p>}
+            </div>
+
+            <Button
+              type="submit"
+              disabled={isPending}
+              className="w-full bg-colored-primary colored-button text-white font-medium py-3 disabled:opacity-50"
+            >
+              {isPending ? "Accepting..." : "Accept invitation"}
+            </Button>
+          </form>
+        </CardContent>
+      </Card>
+    </div>
+  );
+}

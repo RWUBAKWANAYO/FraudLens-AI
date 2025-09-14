@@ -9,6 +9,7 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
+import { Switch } from "../ui/switch";
 
 export function ModeToggle() {
   const { toggleTheme } = useTheme();
@@ -38,3 +39,16 @@ export function ModeToggle() {
     </DropdownMenu>
   );
 }
+
+export const SwitchThemeButton = () => {
+  const { toggleTheme, theme } = useTheme();
+  return (
+    <div className="flex items-center gap-2 text-sm text-primary">
+      <Switch
+        checked={theme === "dark"}
+        onCheckedChange={(checked) => toggleTheme(checked ? "dark" : "light")}
+      />
+      <span className="capitalize text-sm font-medium">{theme ?? "system"} Mode</span>
+    </div>
+  );
+};

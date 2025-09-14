@@ -25,6 +25,7 @@ module.exports = {
         primary: {
           DEFAULT: "var(--primary)",
           foreground: "var(--primary-foreground)",
+          foregroundHalf: "var(--primary-foregroundHalf)",
           green: "var(--primary-green)",
           red: "var(--primary-red)",
           blue: "var(--primary-blue)",

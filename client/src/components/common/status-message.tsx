@@ -6,6 +6,7 @@ import { Loader2 } from "lucide-react";
 type StatusMessageProps = {
   isLoading?: boolean;
   error?: Error | string | null;
+  res?: any;
   height?: string | number;
   width?: string | number;
   classNames?: string;
@@ -21,6 +22,16 @@ export const ErrorCard: React.FC<StatusMessageProps> = ({ error, classNames = ""
     </div>
   );
 };
+export const SuccessCard: React.FC<StatusMessageProps> = ({ res, classNames = "" }) => {
+  return (
+    <div
+      className={`bg-shadow-green text-sm border border-primary-green text-primary-green px-4 py-3 rounded ${classNames}`}
+    >
+      {typeof res === "string" ? res : res?.message || "Completed successfully"}
+    </div>
+  );
+};
+
 export const StatusMessage: React.FC<StatusMessageProps> = ({
   isLoading = false,
   error = null,

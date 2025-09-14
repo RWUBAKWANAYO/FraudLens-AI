@@ -23,3 +23,8 @@ export const getThreatTypeShortLabel = (threatType: ThreatType): string => {
 
   return labels[threatType] || threatType;
 };
+
+export const testCredentials = {
+  email: "humblenayo@gmail.com",
+  password: "humblenayo@gmail.comlogin",
+};
