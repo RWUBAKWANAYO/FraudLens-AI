@@ -1,6 +1,6 @@
 import { prisma } from "../config/db";
 import { Record } from "@prisma/client";
-import { getEmbeddingsBatch } from "../services/aiEmbedding";
+import { getEmbeddingsBatch } from "./aiEmbedding";
 import { publish } from "../queue/bus";
 import { QueryBuilder } from "../utils/queryBuilder";
 

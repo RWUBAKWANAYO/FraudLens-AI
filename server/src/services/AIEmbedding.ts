@@ -4,9 +4,8 @@ import fetch from "node-fetch";
 const client = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
 
 const USE_LOCAL_AI = process.env.USE_LOCAL_AI === "true";
-const LOCAL_AI_URL = process.env.LOCAL_AI_URL || "http://localhost:5001";
+const LOCAL_AI_URL = process.env.LOCAL_AI_URL!;
 
-// simple promise pool so we don’t overwhelm local endpoints
 async function pPool<T, R>(items: T[], limit: number, fn: (x: T) => Promise<R>) {
   const ret: R[] = new Array(items.length) as any;
   let i = 0,
