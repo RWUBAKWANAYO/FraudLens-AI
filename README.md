@@ -5,7 +5,10 @@ FraudLens AI is an **end-to-end fraud detection system** that leverages:
 - **TiDB Cloud** → scalable SQL + vector search  
 - **OpenAI embeddings & AI explanations** → semantic fraud detection + explainability  
 - **Redis Pub/Sub** → realtime progress & alerts  
-- **RabbitMQ** → async processing at scale  
+- **RabbitMQ** → async processing at scale
+
+<img width="1792" height="1120" alt="Screenshot 2025-09-15 at 1 21 17 PM" src="https://github.com/user-attachments/assets/352d8d59-7056-4a7a-a97f-8cc382d666ff" />
+<img width="1792" height="1120" alt="Screenshot 2025-09-15 at 1 20 45 PM" src="https://github.com/user-attachments/assets/46506fac-72ae-41b5-84ed-7bbbb900323d" />
 
 ---
 
@@ -145,3 +148,4 @@ For more in-depth instructions, please see the dedicated READMEs:
 We welcome contributions! Please open issues & PRs.
 
 ---
+
