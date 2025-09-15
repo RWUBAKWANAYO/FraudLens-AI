@@ -10,8 +10,7 @@ The backend service for **FraudLens AI** – built with **Node.js + Express + Pr
 - **Webhook dispatching** to third-party apps (Slack, Teams, etc.)  
 - **API Key management** for external integrations  
 
-> For frontend integration and dashboard usage, see **[Client README](../client/README.md)**
-
+> For frontend integration and dashboard usage, see **[Client README](../client/README.md)**                                                                                                
 > For full project overview, features, and frontend usage, see the **[Root README](../README.md)**
 
 ---
@@ -119,4 +118,5 @@ curl -H "Authorization: APIKey abc123:secret987" \
 ```
 
 ---
+
 
