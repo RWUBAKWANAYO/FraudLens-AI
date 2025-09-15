@@ -124,7 +124,7 @@ model Upload {
   updatedAt   DateTime  @updatedAt
 
   publicId     String? @unique
-  secureUrl    String?
+  secureUrl    String? @db.LongText
   resourceType String?
 
   records Record[]
@@ -150,11 +150,11 @@ model Record {
   device        String?                      @db.VarChar(128)
   geoCountry    String?                      @db.VarChar(8)
   geoCity       String?                      @db.VarChar(128)
-  mcc           String?                      @db.VarChar(8)
+  mcc           String?                      @db.VarChar(20)
   channel       String?                      @db.VarChar(32)
   raw           Json?
   embeddingJson Json?
-  /// VECTOR dimension: 384 for OpenAI, 1105 for local AI
+  /// VECTOR dimension: 384 for OpenAI, 1536 for local AI
   embeddingVec  Unsupported("vector(1536)")?
   createdAt     DateTime                     @default(now())
   updatedAt     DateTime                     @updatedAt

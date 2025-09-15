@@ -38,10 +38,11 @@ next-env.d.ts
 test-schema.js
 draft.js
 /src/scripts
+/dist/scripts
+/data
 /src/benchmarks
 
 /dist/generated/prisma
 test-schema.js
 draft.js
-/dist/scripts
 /dist/benchmarks

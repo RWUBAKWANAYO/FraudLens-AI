@@ -35,7 +35,7 @@ export default function UsersListPage() {
           >
             <CardContent className="space-y-4 p-0">
               <div className="flex flex-col sm:flex-row gap-4">
-                <Avatar className="h-[175px] w-full sm:w-[175px] rounded-lg">
+                <Avatar className="h-[300px] sm:h-[175px] w-full sm:w-[175px] rounded-lg">
                   <AvatarImage
                     src={user.avatarUrl}
                     alt={user.fullName}

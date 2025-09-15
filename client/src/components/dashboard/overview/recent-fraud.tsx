@@ -11,7 +11,7 @@ import {
 } from "@/components/ui/table";
 import { useThreats } from "@/hooks/useThreats";
 import { StatusMessage } from "@/components/common/status-message";
-import { formatThreatType, getSeverity } from "@/lib/utils";
+import { formatAmount, formatThreatType, getSeverity } from "@/lib/utils";
 import moment from "moment";
 import Link from "next/link";
 
@@ -72,7 +72,9 @@ export function RecentFraud() {
                   className="border-b border-accent font-normal hover:bg-tableHover transition-colors"
                 >
                   <TableCell className="py-4">{fraud.metadata?.aiContext?.txId}</TableCell>
-                  <TableCell className="py-4">{fraud.metadata?.aiContext?.amount}</TableCell>
+                  <TableCell className="py-4">
+                    {formatAmount(fraud.metadata?.aiContext?.amount)}
+                  </TableCell>
                   <TableCell className="py-4">
                     {formatThreatType(fraud.metadata?.aiContext?.threatType || "")}
                   </TableCell>
@@ -81,7 +83,9 @@ export function RecentFraud() {
                   >
                     {getSeverity(fraud.confidenceScore).severity}
                   </TableCell>
-                  <TableCell className="py-4">{fraud.upload?.fileName}</TableCell>
+                  <TableCell className="py-4 truncate max-w-[200px]">
+                    {fraud.upload?.fileName}
+                  </TableCell>
                   <TableCell className="py-4">
                     {moment(fraud.createdAt).format("yyyy-MM-DD HH:mm")}
                   </TableCell>

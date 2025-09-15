@@ -3,7 +3,7 @@ import { ThreatExplanation } from "./threat-explanation";
 import { Threat } from "@/types/threat";
 import { Badge } from "@/components/ui/badge";
 import moment from "moment";
-import { formatThreatType } from "@/lib/utils";
+import { formatAmount, formatThreatType } from "@/lib/utils";
 
 interface ThreatCardProps {
   threat: Threat;
@@ -24,9 +24,7 @@ export const ThreatCard = ({ threat }: ThreatCardProps) => {
 
         <div className="flex items-center justify-between text-sm text-primary-foreground">
           <span>Confidence: {(threat.confidenceScore * 100).toFixed(0)}%</span>
-          <span>
-            Amount: {threat.record.amount} {threat.record.currency}
-          </span>
+          <span>Amount: {formatAmount(`${threat.record.amount + threat.record.currency}`)}</span>
         </div>
 
         <div className="text-sm text-primary-foreground">Partner: {threat.record.partner}</div>

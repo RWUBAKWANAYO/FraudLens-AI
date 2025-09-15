@@ -80,6 +80,35 @@ cd client && npm run dev
 * Client → [http://localhost:3000](http://localhost:3000)
 
 ---
+## 🧪 Test Data Generation
+
+To test FraudLens AI's detection capabilities, you can generate sample transaction data with various fraud patterns:
+
+### Using Pre-generated Test Files
+For quick testing, download our sample datasets:
+- [Sample CSV File](https://drive.google.com/file/d/1Gox_3_zdGNFR__H-EuF0aFYHS2ZiBWlF/view?usp=sharing)
+- [Sample JSON File](https://drive.google.com/file/d/1dIQXQXxtdRxBAvHAxqzZqLv-mlkMWRs5/view?usp=sharing) 
+- [Sample XLSX File](https://docs.google.com/spreadsheets/d/1SbmduFF7P1gqA1sEZTLvBWDNs4Sfr08A/edit?usp=sharing&ouid=105270043394940203946&rtpof=true&sd=true)
+
+These files contain realistic transaction data with embedded fraud patterns to demonstrate the system's detection capabilities.
+
+### Generating Custom Test Data
+You can also generate your own test files with custom patterns:
+
+```bash
+# Navigate to server directory
+cd server
+
+# Generate all formats (JSON, CSV, XLSX)
+npm run generate
+
+# Generate specific format with custom record count
+npm run generate:json  # Generate JSON
+npm run generate:csv    # Generate CSV
+npm run generate:xlsx   # Generate XLSX
+```
+
+---
 
 ## 🛎️ Webhooks 
 
@@ -150,5 +179,6 @@ For more in-depth instructions, please see the dedicated READMEs:
 We welcome contributions! Please open issues & PRs.
 
 ---
+
 
 

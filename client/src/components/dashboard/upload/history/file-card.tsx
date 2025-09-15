@@ -66,7 +66,9 @@ export function FileCard({ upload }: FileCardProps) {
         </div>
 
         <div className="my-6 flex flex-col gap-2">
-          <h3 className="font-bold text-sm text-primary truncate w-full">{upload.fileName}</h3>
+          <h3 className="font-bold text-sm text-primary truncate max-w-[200px]">
+            {upload.fileName}
+          </h3>
 
           <span className="text-sm font-light text-primary">
             Record: {upload._count.records} , Threats: {upload._count.threats}

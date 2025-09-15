@@ -41,3 +41,26 @@ export const getSeverity = (score: number) => {
   return { severity, className };
 };
 
+export function formatAmount(amountString?: string | number): string {
+  if (!amountString) return "";
+
+  amountString = amountString.toString();
+
+  const numericMatch = amountString.match(/-?\d+\.?\d*/);
+  if (!numericMatch) return amountString;
+
+  const amount = parseFloat(numericMatch[0]);
+
+  const currencyMatch = amountString.match(/[A-Z]{3}/);
+  const currency = currencyMatch ? currencyMatch[0] : "GBP";
+
+  const formatter = new Intl.NumberFormat("en-GB", {
+    style: "currency",
+    currency: currency,
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
+  });
+
+  return formatter.format(amount);
+}
+
