@@ -86,11 +86,11 @@ export function formatPayloadForDestination(
     const reportId = uploadData.id || "123";
 
     return {
-      text: `Fraud Detection Report\n\n• ${summary.totalRecords} records analyzed\n• ${
+      text: `FraudLens AI Report\n\n• ${summary.totalRecords} records analyzed\n• ${
         summary.flagged
       } suspicious transaction${summary.flagged !== 1 ? "s" : ""} flagged (USD ${
         summary.flaggedValue?.toFixed(2) || "0.00"
-      })\n\nDetected include: ${primaryThreat}\n\nView full details in FraudGuard: ${dashboardUrl}/dashboard/reports/${reportId}`,
+      })\n\nDetected include: ${primaryThreat}\n\nView full details in FraudLens AI: ${dashboardUrl}/dashboard/reports/${reportId}`,
     };
   }
 

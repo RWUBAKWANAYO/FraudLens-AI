@@ -43,7 +43,7 @@ export default function RegisterPage() {
       <Card className="w-full max-w-md bg-foreground shadow-lg border-0 p-4 mt-[60px] md:mt-0">
         <CardHeader className="pb-6">
           <h1 className="text-2xl font-bold text-primary">Sign up</h1>
-          <p className="text-primary-foreground text-sm">Sign up for a new FraudList Account.</p>
+          <p className="text-primary-foreground text-sm">Sign up for a new FraudLens AI Account.</p>
         </CardHeader>
 
         <CardContent>

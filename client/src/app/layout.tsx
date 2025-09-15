@@ -15,8 +15,11 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "Fraud Detection App",
+  title: "FraudLens AI",
   description: "Fraud Detection App ",
+  icons: {
+    icon: "/assets/logo.svg",
+  },
 };
 
 const ThemeScript = () => {

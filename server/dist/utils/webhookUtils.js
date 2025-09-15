@@ -72,7 +72,7 @@ function formatPayloadForDestination(payload, webhookUrl, threatTypeMap) {
         const dashboardUrl = process.env.FRONTEND_URL || "https://yourplatform.com";
         const reportId = uploadData.id || "123";
         return {
-            text: `Fraud Detection Report\n\n• ${summary.totalRecords} records analyzed\n• ${summary.flagged} suspicious transaction${summary.flagged !== 1 ? "s" : ""} flagged (USD ${((_e = summary.flaggedValue) === null || _e === void 0 ? void 0 : _e.toFixed(2)) || "0.00"})\n\nDetected include: ${primaryThreat}\n\nView full details in FraudGuard: ${dashboardUrl}/dashboard/reports/${reportId}`,
+            text: `FraudLens AI Report\n\n• ${summary.totalRecords} records analyzed\n• ${summary.flagged} suspicious transaction${summary.flagged !== 1 ? "s" : ""} flagged (USD ${((_e = summary.flaggedValue) === null || _e === void 0 ? void 0 : _e.toFixed(2)) || "0.00"})\n\nDetected include: ${primaryThreat}\n\nView full details in FraudLens AI: ${dashboardUrl}/dashboard/reports/${reportId}`,
         };
     }
     if (webhookUrl.includes("hooks.slack.com") && payload.event === "threat.created") {

@@ -125,7 +125,7 @@ export default function LoginPage() {
               </Button>
             </div>
             <div className="text-center">
-              <span className="text-sm text-primary-foreground">New to FraudList? </span>
+              <span className="text-sm text-primary-foreground">New to FraudLens AI? </span>
               <Link href="/register" className="text-sm text-colored-primary hover:underline">
                 Create account
               </Link>
