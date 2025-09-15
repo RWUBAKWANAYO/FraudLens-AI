@@ -9,11 +9,11 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import { Button } from "@/components/ui/button";
 import { useThreats } from "@/hooks/useThreats";
 import { StatusMessage } from "@/components/common/status-message";
 import { formatThreatType, getSeverity } from "@/lib/utils";
 import moment from "moment";
+import Link from "next/link";
 
 export function RecentFraud() {
   const {
@@ -30,9 +30,12 @@ export function RecentFraud() {
     <div className="w-full bg-foreground rounded-lg p-6 h-full">
       <div className="flex items-center justify-between mb-4">
         <h2 className="text-lg font-bold">Recent Fraud Attempts</h2>
-        <Button className="colored-button text-colored-primary shadow-none bg-transparent font-semibold">
+        <Link
+          href={"/dashboard/threats"}
+          className="colored-button text-colored-primary shadow-none bg-transparent font-semibold py-1.5 px-3 rounded-md text-sm"
+        >
           View All
-        </Button>
+        </Link>
       </div>
       {(isLoading || error) && (
         <StatusMessage

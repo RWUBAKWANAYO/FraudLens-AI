@@ -138,29 +138,29 @@ model Upload {
 }
 
 model Record {
-  id            String                      @id @default(uuid())
+  id            String                       @id @default(uuid())
   companyId     String
   uploadId      String
   txId          String?
-  partner       String?                     @db.VarChar(256)
+  partner       String?                      @db.VarChar(256)
   amount        Float?
-  currency      String?                     @db.VarChar(12)
+  currency      String?                      @db.VarChar(12)
   date          DateTime?
-  ip            String?                     @db.VarChar(64)
-  device        String?                     @db.VarChar(128)
-  geoCountry    String?                     @db.VarChar(8)
-  geoCity       String?                     @db.VarChar(128)
-  mcc           String?                     @db.VarChar(8)
-  channel       String?                     @db.VarChar(32)
+  ip            String?                      @db.VarChar(64)
+  device        String?                      @db.VarChar(128)
+  geoCountry    String?                      @db.VarChar(8)
+  geoCity       String?                      @db.VarChar(128)
+  mcc           String?                      @db.VarChar(8)
+  channel       String?                      @db.VarChar(32)
   raw           Json?
   embeddingJson Json?
   /// VECTOR dimension: 384 for OpenAI, 1105 for local AI
-  embeddingVec  Unsupported("vector(384)")?
-  createdAt     DateTime                    @default(now())
-  updatedAt     DateTime                    @updatedAt
+  embeddingVec  Unsupported("vector(1536)")?
+  createdAt     DateTime                     @default(now())
+  updatedAt     DateTime                     @updatedAt
   Alert         Alert[]
-  company       Company                     @relation(fields: [companyId], references: [id], onDelete: Cascade)
-  upload        Upload                      @relation(fields: [uploadId], references: [id], onDelete: Cascade)
+  company       Company                      @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  upload        Upload                       @relation(fields: [uploadId], references: [id], onDelete: Cascade)
   threats       Threat[]
 
   normalizedPartner  String?

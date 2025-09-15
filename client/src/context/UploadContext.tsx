@@ -12,6 +12,7 @@ const UploadContext = createContext<UploadContextType | undefined>(undefined);
 export function UploadProvider({ children }: { children: React.ReactNode }) {
   const [activeUploads, setActiveUploads] = useState<Map<string, UploadProgress>>(new Map());
   const [completedUploads, setCompletedUploads] = useState<Map<string, UploadResult>>(new Map());
+  const [failedUploads, setFailedUploads] = useState<Map<string, UploadResult>>(new Map());
   const [alerts, setAlerts] = useState<Alert[]>([]);
   const [alertSummary, setAlertSummary] = useState<Alert[]>([]);
   const [socket, setSocket] = useState<Socket | null>(null);
@@ -98,9 +99,9 @@ export function UploadProvider({ children }: { children: React.ReactNode }) {
         });
 
         newSocket.on("upload_error", (data) => {
-          setActiveUploads((prev) => {
-            const newMap = new Map(prev);
-            newMap.delete(data.uploadId);
+          setFailedUploads((prev) => {
+            console.error("Upload failed:", data);
+            const newMap = new Map(prev).set(data.uploadId, data);
             return newMap;
           });
 
@@ -162,6 +163,7 @@ export function UploadProvider({ children }: { children: React.ReactNode }) {
     setAlertSummary([]);
     setActiveUploads(new Map());
     setCompletedUploads(new Map());
+    setFailedUploads(new Map());
   }, []);
   const dismissAlert = useCallback(
     (alertId: string) => setAlerts((prev) => prev.filter((alert) => alert.id !== alertId)),
@@ -171,6 +173,7 @@ export function UploadProvider({ children }: { children: React.ReactNode }) {
   const value: UploadContextType = {
     activeUploads,
     completedUploads,
+    failedUploads,
     isProcessing,
     alerts,
     alertSummary,

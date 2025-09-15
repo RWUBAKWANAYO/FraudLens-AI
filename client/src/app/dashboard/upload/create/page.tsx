@@ -20,7 +20,7 @@ function FileUpload() {
 
   const { user } = useRequireAuth();
   const { toast } = useToast();
-  const { activeUploads, clearAlerts } = useUploadContext();
+  const { activeUploads, clearAlerts, failedUploads } = useUploadContext();
   const latestUpload = Array.from(activeUploads.values()).at(-1);
 
   const uploadMutation = useUpload();
@@ -37,6 +37,15 @@ function FileUpload() {
       setProgress(latestUpload.progress);
     }
   }, [latestUpload]);
+
+  useEffect(() => {
+    if (failedUploads.size > 0) {
+      setProgress(0);
+      setStage(null);
+      setIsFileAsynced(false);
+      clearAlerts();
+    }
+  }, [failedUploads]);
 
   const handleSubmit = () => {
     if (!file) return;

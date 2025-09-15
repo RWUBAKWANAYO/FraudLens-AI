@@ -33,7 +33,7 @@ export function ModeToggle() {
         </DropdownMenuItem>
         <DropdownMenuItem onClick={() => toggleTheme("dark")}>
           <Moon className="h-[1.2rem] w-[1.2rem] text-primary-foreground " />
-          <span className="text-primary">Darck</span>
+          <span className="text-primary">Dark</span>
         </DropdownMenuItem>
       </DropdownMenuContent>
     </DropdownMenu>

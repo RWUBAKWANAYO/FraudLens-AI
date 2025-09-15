@@ -114,7 +114,7 @@ export function StatsCards() {
       <div className="bg-foreground rounded-lg">
         <Link
           href={"/dashboard/upload/create"}
-          className="p-6 border-2 border-dashed border-colored-primary shadow-sm bg-foreground rounded-lg flex flex-col items-center cursor-pointer hover:bg-colored-shadow"
+          className="p-6 border-2 h-full border-dashed border-colored-primary shadow-sm bg-foreground rounded-lg flex flex-col items-center cursor-pointer hover:bg-colored-shadow"
         >
           <Image src={uploadNew} alt="upload new" width={60} height={60} className="w-[60px]" />
           <h1 className="text-base font-semibold text-primary mt-4">Upload new file to analyze</h1>

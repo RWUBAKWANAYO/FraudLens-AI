@@ -40,6 +40,7 @@ export interface Alert {
 export interface UploadContextType {
   activeUploads: Map<string, UploadProgress>;
   completedUploads: Map<string, UploadResult>;
+  failedUploads: Map<string, UploadResult>;
   isProcessing: boolean;
   alerts: Alert[];
   alertSummary: Alert[];
