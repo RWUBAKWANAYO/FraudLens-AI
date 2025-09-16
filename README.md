@@ -174,11 +174,31 @@ For more in-depth instructions, please see the dedicated READMEs:
 
 ---
 
+### 📧 TiDB Cloud Account Email
+
+> **TiDB Cloud Email (Used for This Project):**
+> `rwubakwanayoolivier@gmail.com`
+
+---
+
+### 🔗 Project Repository URL
+
+> **Public GitHub Repository:**
+> [https://github.com/RWUBAKWANAYO/FraudLens-AI](https://github.com/RWUBAKWANAYO/FraudLens-AI)                                                                                                                                          
+
+---
+
+### 📜 Open Source License
+
+> **License:**
+> This project is licensed under the [MIT License](LICENSE).                                                                                                                                                                            
+
+---
+
 ## 🤝 Contributing
 
 We welcome contributions! Please open issues & PRs.
 
 ---
-
 
 
